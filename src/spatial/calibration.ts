@@ -63,32 +63,37 @@ function solveLinearSystem(matrix: number[][], vector: number[]): number[] {
 
     if (bestRow !== pivot) {
       const temporary = augmented[pivot];
-      augmented[pivot] = augmented[bestRow] ?? [];
-      augmented[bestRow] = temporary ?? [];
+      const replacement = augmented[bestRow];
+      if (!temporary || !replacement) {
+        throw new Error('Calibration matrix row is unavailable');
+      }
+      augmented[pivot] = replacement;
+      augmented[bestRow] = temporary;
     }
 
-    const pivotValue = augmented[pivot]?.[pivot] ?? 0;
+    const pivotRow = augmented[pivot];
+    if (!pivotRow) {
+      throw new Error('Calibration matrix pivot row is unavailable');
+    }
+    const pivotValue = pivotRow[pivot] ?? 0;
     for (let column = pivot; column <= n; column += 1) {
-      const current = augmented[pivot]?.[column] ?? 0;
-      if (augmented[pivot]) {
-        augmented[pivot][column] = current / pivotValue;
-      }
+      pivotRow[column] = (pivotRow[column] ?? 0) / pivotValue;
     }
 
     for (let row = 0; row < n; row += 1) {
       if (row === pivot) {
         continue;
       }
-      const factor = augmented[row]?.[pivot] ?? 0;
+      const targetRow = augmented[row];
+      if (!targetRow) {
+        throw new Error('Calibration matrix target row is unavailable');
+      }
+      const factor = targetRow[pivot] ?? 0;
       if (Math.abs(factor) < EPSILON) {
         continue;
       }
       for (let column = pivot; column <= n; column += 1) {
-        const current = augmented[row]?.[column] ?? 0;
-        const pivotEntry = augmented[pivot]?.[column] ?? 0;
-        if (augmented[row]) {
-          augmented[row][column] = current - factor * pivotEntry;
-        }
+        targetRow[column] = (targetRow[column] ?? 0) - factor * (pivotRow[column] ?? 0);
       }
     }
   }
@@ -112,11 +117,12 @@ export function fitHomography(correspondences: readonly CalibrationCorrespondenc
     for (let i = 0; i < 8; i += 1) {
       const ri = row[i] ?? 0;
       rhs[i] = (rhs[i] ?? 0) + ri * target;
+      const normalRow = normal[i];
+      if (!normalRow) {
+        throw new Error('Calibration normal matrix row is unavailable');
+      }
       for (let j = 0; j < 8; j += 1) {
-        const current = normal[i]?.[j] ?? 0;
-        if (normal[i]) {
-          normal[i][j] = current + ri * (row[j] ?? 0);
-        }
+        normalRow[j] = (normalRow[j] ?? 0) + ri * (row[j] ?? 0);
       }
     }
   };
