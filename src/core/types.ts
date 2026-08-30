@@ -54,15 +54,19 @@ export interface Track {
   samples: TrackSample[];
 }
 
+/**
+ * Segmento orientado desde `a` hacia `b`.
+ * Las etiquetas describen el cruce transversal respecto de esa orientación.
+ */
 export interface DirectedLine {
   id: string;
   a: Point2D;
   b: Point2D;
-  labelAToB?: string;
-  labelBToA?: string;
+  labelLeftToRight?: string;
+  labelRightToLeft?: string;
 }
 
-export type CrossingDirection = 'A_TO_B' | 'B_TO_A';
+export type CrossingDirection = 'LEFT_TO_RIGHT' | 'RIGHT_TO_LEFT';
 
 export interface LineCrossingEvent {
   eventId: string;
