@@ -1,5 +1,5 @@
 import type { Point2D } from '../core/types';
-import { applyHomography } from './gProjection';
+import { applyHomography, invertMatrix3 } from './gProjection';
 import type { Matrix3 } from './types';
 
 const EPSILON = 1e-10;
@@ -81,17 +81,13 @@ function solveLinearSystem(matrix: number[][], vector: number[]): number[] {
     }
 
     for (let row = 0; row < n; row += 1) {
-      if (row === pivot) {
-        continue;
-      }
+      if (row === pivot) continue;
       const targetRow = augmented[row];
       if (!targetRow) {
         throw new Error('Calibration matrix target row is unavailable');
       }
       const factor = targetRow[pivot] ?? 0;
-      if (Math.abs(factor) < EPSILON) {
-        continue;
-      }
+      if (Math.abs(factor) < EPSILON) continue;
       for (let column = pivot; column <= n; column += 1) {
         targetRow[column] = (targetRow[column] ?? 0) - factor * (pivotRow[column] ?? 0);
       }
@@ -101,15 +97,64 @@ function solveLinearSystem(matrix: number[][], vector: number[]): number[] {
   return augmented.map((row) => row[n] ?? 0);
 }
 
-/**
- * Least-squares homography fit with h33 fixed to 1.
- * Intended for small interactive calibration sets (typically 4–12 points).
- */
-export function fitHomography(correspondences: readonly CalibrationCorrespondence[]): Matrix3 {
-  if (correspondences.length < 4) {
-    throw new Error('At least four calibration correspondences are required');
+function multiplyMatrix3(a: Matrix3, b: Matrix3): Matrix3 {
+  const result = Array<number>(9).fill(0);
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 3; column += 1) {
+      let value = 0;
+      for (let k = 0; k < 3; k += 1) {
+        value += (a[row * 3 + k] ?? 0) * (b[k * 3 + column] ?? 0);
+      }
+      result[row * 3 + column] = value;
+    }
+  }
+  return result as unknown as Matrix3;
+}
+
+interface PointNormalization {
+  transform: Matrix3;
+  points: Point2D[];
+}
+
+/** Hartley-style similarity normalization: centroid to origin, mean radius √2. */
+function normalizePoints(points: readonly Point2D[]): PointNormalization {
+  if (points.length === 0) {
+    throw new Error('Cannot normalize an empty point set');
   }
 
+  const centroid = points.reduce(
+    (sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }),
+    { x: 0, y: 0 },
+  );
+  centroid.x /= points.length;
+  centroid.y /= points.length;
+
+  const meanDistance = points.reduce(
+    (sum, point) => sum + Math.hypot(point.x - centroid.x, point.y - centroid.y),
+    0,
+  ) / points.length;
+
+  if (meanDistance < EPSILON) {
+    throw new Error('Calibration points collapse to one location');
+  }
+
+  const scale = Math.SQRT2 / meanDistance;
+  const transform: Matrix3 = [
+    scale, 0, -scale * centroid.x,
+    0, scale, -scale * centroid.y,
+    0, 0, 1,
+  ];
+
+  return {
+    transform,
+    points: points.map((point) => applyHomography(point, transform)),
+  };
+}
+
+/** Fits h33=1 after the input coordinates have already been normalized. */
+function fitNormalizedHomography(
+  correspondences: readonly CalibrationCorrespondence[],
+): Matrix3 {
   const normal = Array.from({ length: 8 }, () => Array<number>(8).fill(0));
   const rhs = Array<number>(8).fill(0);
 
@@ -118,9 +163,7 @@ export function fitHomography(correspondences: readonly CalibrationCorrespondenc
       const ri = row[i] ?? 0;
       rhs[i] = (rhs[i] ?? 0) + ri * target;
       const normalRow = normal[i];
-      if (!normalRow) {
-        throw new Error('Calibration normal matrix row is unavailable');
-      }
+      if (!normalRow) throw new Error('Calibration normal matrix row is unavailable');
       for (let j = 0; j < 8; j += 1) {
         normalRow[j] = (normalRow[j] ?? 0) + ri * (row[j] ?? 0);
       }
@@ -132,7 +175,6 @@ export function fitHomography(correspondences: readonly CalibrationCorrespondenc
     const y = correspondence.imagePoint.y;
     const u = correspondence.groundPoint.x;
     const v = correspondence.groundPoint.y;
-
     accumulate([x, y, 1, 0, 0, 0, -u * x, -u * y], u);
     accumulate([0, 0, 0, x, y, 1, -v * x, -v * y], v);
   }
@@ -143,6 +185,39 @@ export function fitHomography(correspondences: readonly CalibrationCorrespondenc
     h[3] ?? 0, h[4] ?? 0, h[5] ?? 0,
     h[6] ?? 0, h[7] ?? 0, 1,
   ];
+}
+
+/**
+ * Numerically conditioned least-squares homography for small interactive
+ * calibration sets. Both image and ground coordinates are similarity-normalized
+ * before solving, then the homography is denormalized back to original units.
+ */
+export function fitHomography(correspondences: readonly CalibrationCorrespondence[]): Matrix3 {
+  if (correspondences.length < 4) {
+    throw new Error('At least four calibration correspondences are required');
+  }
+
+  const imageNormalization = normalizePoints(correspondences.map((item) => item.imagePoint));
+  const groundNormalization = normalizePoints(correspondences.map((item) => item.groundPoint));
+
+  const normalizedCorrespondences = correspondences.map((_, index) => {
+    const imagePoint = imageNormalization.points[index];
+    const groundPoint = groundNormalization.points[index];
+    if (!imagePoint || !groundPoint) {
+      throw new Error('Normalized calibration point is unavailable');
+    }
+    return { imagePoint, groundPoint };
+  });
+
+  const normalizedH = fitNormalizedHomography(normalizedCorrespondences);
+  const denormalized = multiplyMatrix3(
+    invertMatrix3(groundNormalization.transform),
+    multiplyMatrix3(normalizedH, imageNormalization.transform),
+  );
+
+  const scale = denormalized[8] ?? 1;
+  if (Math.abs(scale) < EPSILON) return denormalized;
+  return denormalized.map((value) => value / scale) as unknown as Matrix3;
 }
 
 function errorMeters(
