@@ -31,10 +31,8 @@ describe('detector model registry', () => {
   });
 
   it('allows experimentation but blocks bundling when checkpoint licensing is unresolved', () => {
-    const candidate = model({
-      weightsLicense: undefined,
-      weightsRedistributionVerified: false,
-    });
+    const candidate = model({ weightsRedistributionVerified: false });
+    delete candidate.weightsLicense;
     const eligibility = evaluateModelEligibility(candidate);
 
     expect(eligibility.eligibleForExperiment).toBe(true);
