@@ -7,15 +7,21 @@ import {
   removeGroundTruthObject,
   restoreAnnotationDraft,
   serializeAnnotationDraft,
+  setAnnotationSamplingPlan,
   type AnnotationDraft,
   type DetectorGroundTruthClass,
 } from '../detection/annotationDraft';
+import {
+  getAnnotationSamplingProgress,
+  plannedSelectionForIndex,
+} from '../detection/annotationSampling';
 import { parseAnnotatedBenchmarkSequenceJson } from '../detection/benchmarkDatasetParser';
 import type {
   AnnotatedBenchmarkFrame,
   GroundTruthObject,
   GroundTruthOcclusion,
 } from '../detection/benchmarkDataset';
+import { createTemporalSamplingPlan } from '../detection/temporalSampling';
 
 interface DraftRectangle {
   startX: number;
@@ -25,6 +31,8 @@ interface DraftRectangle {
 }
 
 type AnnotationInteractionMode = 'explore' | 'annotate';
+
+const PLANNED_CAPTURE_TOLERANCE_MS = 250;
 
 function safeFilePart(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'annotations';
@@ -104,6 +112,10 @@ export class AnnotationPanel {
   private videoUrl: string | null = null;
   private drawing: DraftRectangle | null = null;
   private interactionMode: AnnotationInteractionMode = 'explore';
+  private exploreMediaTimeMs: number | null = null;
+  private pendingPlanIndex: number | null = null;
+  private samplingSeed = 'pilot-001';
+  private samplingCount = 12;
   private className: DetectorGroundTruthClass = 'person';
   private occlusion: GroundTruthOcclusion = 'none';
   private ignore = false;
@@ -137,6 +149,16 @@ export class AnnotationPanel {
       ? `${html(this.videoFile.name)} · ${(this.videoFile.size / 1048576).toFixed(1)} MB`
       : 'Ningún video seleccionado';
     const annotating = this.interactionMode === 'annotate';
+    const sampling = getAnnotationSamplingProgress(this.draft);
+    const plan = this.draft.samplingPlan;
+    const pendingRequested = this.pendingPlanIndex === null
+      ? undefined
+      : plan?.plannedMediaTimesMs[this.pendingPlanIndex];
+    const selectionLabel = frame?.selection?.source === 'planned'
+      ? `plan #${(frame.selection.planIndex ?? 0) + 1}`
+      : frame?.selection?.source === 'manual'
+        ? 'manual'
+        : 'sin provenance';
 
     mount.innerHTML = `
       <section class="node-runtime-shell annotation-shell">
@@ -156,6 +178,21 @@ export class AnnotationPanel {
           <label class="annotation-file-action"><span>Importar anotaciones</span><strong>JSON existente</strong><input data-annotation-import type="file" accept=".json,application/json"></label>
         </div>
 
+        <div class="annotation-sampling-card">
+          <div class="annotation-sampling-summary">
+            <span>Muestreo temporal</span>
+            <strong>${plan ? `${sampling.capturedPlannedCount}/${sampling.plannedCount} planificadas · ${sampling.manualCount} manuales` : 'Sin plan reproducible'}</strong>
+            <small>${plan ? `seed ${html(plan.seed)} · jitter ${plan.jitterFraction.toFixed(2)} · margen ${formatTime(plan.startMarginMs)} / ${formatTime(plan.endMarginMs)}` : 'Genera un plan antes de anotar para reducir selección por conveniencia.'}</small>
+          </div>
+          <label><span>Seed</span><input data-sampling-seed value="${html(this.samplingSeed)}"></label>
+          <label><span>Nº muestras</span><input data-sampling-count type="number" min="1" max="200" step="1" value="${this.samplingCount}"></label>
+          <div class="annotation-sampling-actions">
+            <button class="action secondary" data-generate-sampling type="button" ${this.videoFile ? '' : 'disabled'}>${plan ? 'Recalcular plan' : 'Generar plan'}</button>
+            <button class="action primary" data-next-planned type="button" ${plan && sampling.nextPlanIndex !== null && this.videoFile ? '' : 'disabled'}>Ir a siguiente muestra</button>
+          </div>
+          ${pendingRequested === undefined ? '' : `<div class="annotation-pending-sample">Muestra planificada #${(this.pendingPlanIndex ?? 0) + 1} · solicitada ${formatTime(pendingRequested)} · tolerancia ±${PLANNED_CAPTURE_TOLERANCE_MS} ms</div>`}
+        </div>
+
         <div class="annotation-workspace">
           <div class="annotation-stage-wrap">
             <div class="annotation-stage ${annotating ? 'is-annotating' : 'is-exploring'}">
@@ -167,19 +204,20 @@ export class AnnotationPanel {
             <div class="annotation-stage-toolbar">
               ${annotating
                 ? `<button class="action primary" data-explore-video type="button" ${this.videoFile ? '' : 'disabled'}>Explorar otro frame</button>`
-                : `<button class="action primary" data-capture-frame type="button" ${this.videoFile ? '' : 'disabled'}>Capturar frame visible</button>`}
+                : `<button class="action primary" data-capture-frame type="button" ${this.videoFile ? '' : 'disabled'}>${this.pendingPlanIndex === null ? 'Capturar frame manual' : 'Capturar muestra planificada'}</button>`}
+              ${this.pendingPlanIndex === null ? '' : '<button class="action secondary" data-cancel-planned type="button">Cancelar muestra / explorar libre</button>'}
               <button class="action secondary" data-prev-frame type="button" ${activeIndex > 0 ? '' : 'disabled'}>← Frame anterior</button>
               <button class="action secondary" data-next-frame type="button" ${activeIndex >= 0 && activeIndex < this.draft.frames.length - 1 ? '' : 'disabled'}>Frame siguiente →</button>
               <button class="action secondary" data-remove-frame type="button" ${frame ? '' : 'disabled'}>Eliminar frame</button>
             </div>
-            <p class="runtime-note">En <strong>Explorar video</strong> los controles del reproductor quedan libres. Al capturar un frame se entra en <strong>Anotar frame</strong> y el canvas recibe el puntero. Presiona <kbd>Esc</kbd> para volver a explorar. Las cajas se guardan en píxeles fuente, no en píxeles CSS. <code>timestampMs</code> se inicializa igual a <code>mediaTimeMs</code>, pero ambos campos permanecen semánticamente separados.</p>
+            <p class="runtime-note">En <strong>Explorar video</strong> los controles del reproductor quedan libres. Un frame capturado desde el plan conserva <code>planIndex</code>, tiempo solicitado y tiempo realmente presentado. Un frame libre queda marcado <strong>manual</strong>. Presiona <kbd>Esc</kbd> para volver a explorar.</p>
           </div>
 
           <aside class="annotation-sidebar">
             <div class="annotation-frame-summary">
               <span>Frame activo</span>
               <strong>${frame ? html(frame.frameId) : '—'}</strong>
-              <small>${frame ? `${formatTime(frame.mediaTimeMs)} · ${frame.width}×${frame.height} · ${frame.objects.length} objetos` : `${this.draft.frames.length} frames capturados`}</small>
+              <small>${frame ? `${formatTime(frame.mediaTimeMs)} · ${frame.width}×${frame.height} · ${frame.objects.length} objetos · ${selectionLabel}` : `${this.draft.frames.length} frames capturados`}</small>
             </div>
 
             <div class="annotation-object-controls">
@@ -242,6 +280,16 @@ export class AnnotationPanel {
     mount.querySelector<HTMLInputElement>('[data-annotation-import]')?.addEventListener('change', (event) => {
       void this.importAnnotations((event.currentTarget as HTMLInputElement).files?.[0] ?? null);
     });
+    mount.querySelector<HTMLInputElement>('[data-sampling-seed]')?.addEventListener('input', (event) => {
+      this.samplingSeed = (event.currentTarget as HTMLInputElement).value;
+    });
+    mount.querySelector<HTMLInputElement>('[data-sampling-count]')?.addEventListener('input', (event) => {
+      const value = Number((event.currentTarget as HTMLInputElement).value);
+      if (Number.isInteger(value) && value > 0) this.samplingCount = value;
+    });
+    mount.querySelector<HTMLButtonElement>('[data-generate-sampling]')?.addEventListener('click', () => this.generateSamplingPlan());
+    mount.querySelector<HTMLButtonElement>('[data-next-planned]')?.addEventListener('click', () => void this.seekNextPlannedSample());
+    mount.querySelector<HTMLButtonElement>('[data-cancel-planned]')?.addEventListener('click', () => this.cancelPendingPlannedSample());
     mount.querySelector<HTMLSelectElement>('[data-annotation-class]')?.addEventListener('change', (event) => {
       this.className = (event.currentTarget as HTMLSelectElement).value as DetectorGroundTruthClass;
     });
@@ -282,8 +330,12 @@ export class AnnotationPanel {
     if (!video || !this.videoUrl) return;
     video.src = this.videoUrl;
     const frame = this.activeFrame();
-    if (frame?.mediaTimeMs !== undefined) video.currentTime = frame.mediaTimeMs / 1000;
-    video.addEventListener('loadedmetadata', () => this.configureCanvas(video), { once: true });
+    const targetMs = frame?.mediaTimeMs ?? this.exploreMediaTimeMs ?? undefined;
+    if (targetMs !== undefined) video.currentTime = targetMs / 1000;
+    video.addEventListener('loadedmetadata', () => {
+      this.configureCanvas(video);
+      if (targetMs !== undefined) video.currentTime = targetMs / 1000;
+    }, { once: true });
     video.addEventListener('seeked', () => this.drawOverlay());
     video.addEventListener('loadeddata', () => this.drawOverlay(), { once: true });
   }
@@ -300,6 +352,8 @@ export class AnnotationPanel {
     this.revokeVideoUrl();
     this.videoFile = file;
     this.interactionMode = 'explore';
+    this.exploreMediaTimeMs = null;
+    this.pendingPlanIndex = null;
     this.drawing = null;
     this.error = null;
     if (!file) {
@@ -308,7 +362,7 @@ export class AnnotationPanel {
       return;
     }
     this.videoUrl = URL.createObjectURL(file);
-    this.message = `${file.name} cargado localmente. Explora el video y captura una escena representativa.`;
+    this.message = `${file.name} cargado localmente. Genera un plan reproducible o explora libremente para añadir frames manuales.`;
     this.render();
   }
 
@@ -319,13 +373,80 @@ export class AnnotationPanel {
       this.draft = restoreAnnotationDraft(sequence);
       this.activeFrameId = this.draft.frames[0]?.frameId ?? null;
       this.selectedAnnotationId = null;
+      this.pendingPlanIndex = null;
       this.interactionMode = this.activeFrameId ? 'annotate' : 'explore';
+      if (this.draft.samplingPlan) {
+        this.samplingSeed = this.draft.samplingPlan.seed;
+        this.samplingCount = this.draft.samplingPlan.sampleCount;
+      }
       this.error = null;
       this.message = `${file.name} importado · ${this.draft.frames.length} frames.`;
     } catch (error) {
       this.error = error instanceof Error ? error.message : 'annotation_import_failed';
       this.message = 'El archivo de anotaciones fue rechazado.';
     }
+    this.render();
+  }
+
+  private generateSamplingPlan(): void {
+    const video = this.mountElement?.querySelector<HTMLVideoElement>('[data-annotation-player]');
+    if (!video || !this.videoFile) return;
+    const durationMs = video.duration * 1000;
+    if (!Number.isFinite(durationMs) || durationMs <= 0) {
+      this.error = 'El video aún no informa una duración utilizable.';
+      this.render();
+      return;
+    }
+    try {
+      const marginMs = Math.min(2_000, durationMs * 0.02);
+      const plan = createTemporalSamplingPlan({
+        durationMs,
+        sampleCount: this.samplingCount,
+        seed: this.samplingSeed,
+        startMarginMs: marginMs,
+        endMarginMs: marginMs,
+        jitterFraction: 0.5,
+      });
+      setAnnotationSamplingPlan(this.draft, plan);
+      this.pendingPlanIndex = null;
+      this.error = null;
+      this.message = `Plan temporal generado: ${plan.sampleCount} muestras reproducibles. Usa “Ir a siguiente muestra” para anotarlas sin selección por conveniencia.`;
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : 'annotation_sampling_plan_failed';
+      this.message = 'No se modificó el plan de muestreo.';
+    }
+    this.render();
+  }
+
+  private async seekNextPlannedSample(): Promise<void> {
+    const plan = this.draft.samplingPlan;
+    const progress = getAnnotationSamplingProgress(this.draft);
+    const index = progress.nextPlanIndex;
+    if (!plan || index === null) return;
+    const requested = plan.plannedMediaTimesMs[index];
+    if (requested === undefined) return;
+    this.pendingPlanIndex = index;
+    this.activeFrameId = null;
+    this.selectedAnnotationId = null;
+    this.interactionMode = 'explore';
+    this.exploreMediaTimeMs = requested;
+    this.error = null;
+    this.message = `Muestra planificada #${index + 1}: tiempo solicitado ${formatTime(requested)}. Captúrala sin mover el reproductor.`;
+    this.render();
+    const video = this.mountElement?.querySelector<HTMLVideoElement>('[data-annotation-player]');
+    if (!video) return;
+    try {
+      await waitForSeek(video, requested / 1000);
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : 'annotation_planned_seek_failed';
+      this.message = 'No se pudo posicionar la muestra planificada.';
+      this.render();
+    }
+  }
+
+  private cancelPendingPlannedSample(): void {
+    this.pendingPlanIndex = null;
+    this.message = 'Muestra planificada cancelada. La próxima captura libre quedará etiquetada como manual.';
     this.render();
   }
 
@@ -339,26 +460,53 @@ export class AnnotationPanel {
     }
     video.pause();
     const mediaTimeMs = await presentedMediaTimeMs(video);
+    const plan = this.draft.samplingPlan;
+    const plannedIndex = this.pendingPlanIndex;
+    let selection = { source: 'manual' as const };
+    if (plannedIndex !== null) {
+      if (!plan) {
+        this.error = 'La muestra planificada perdió su plan de referencia.';
+        this.render();
+        return;
+      }
+      const plannedSelection = plannedSelectionForIndex(plan, plannedIndex);
+      const requested = plannedSelection.requestedMediaTimeMs ?? Number.NaN;
+      const errorMs = Math.abs(mediaTimeMs - requested);
+      if (!Number.isFinite(errorMs) || errorMs > PLANNED_CAPTURE_TOLERANCE_MS) {
+        this.error = `Frame fuera de tolerancia del plan: error ${Number.isFinite(errorMs) ? errorMs.toFixed(1) : 'desconocido'} ms; máximo ${PLANNED_CAPTURE_TOLERANCE_MS} ms.`;
+        this.message = 'La captura no se añadió como muestra planificada. Vuelve a posicionar la muestra o cancélala para capturar manualmente.';
+        this.render();
+        return;
+      }
+      selection = plannedSelection as typeof selection;
+    }
+
     const frame = addAnnotationFrame(this.draft, {
       mediaTimeMs,
       width: video.videoWidth,
       height: video.videoHeight,
+      selection,
     });
     this.activeFrameId = frame.frameId;
+    this.exploreMediaTimeMs = mediaTimeMs;
     this.selectedAnnotationId = null;
     this.interactionMode = 'annotate';
+    this.pendingPlanIndex = null;
     this.error = null;
-    this.message = `${frame.frameId} capturado en ${formatTime(frame.mediaTimeMs)}. Arrastra sobre la imagen para crear cajas.`;
+    this.message = `${frame.frameId} capturado en ${formatTime(frame.mediaTimeMs)} · ${frame.selection?.source ?? 'sin provenance'}. Arrastra sobre la imagen para crear cajas.`;
     this.render();
   }
 
   private exploreVideo(): void {
     if (!this.videoFile) return;
+    const frame = this.activeFrame();
+    this.exploreMediaTimeMs = frame?.mediaTimeMs ?? this.exploreMediaTimeMs;
     this.interactionMode = 'explore';
+    this.pendingPlanIndex = null;
     this.drawing = null;
     this.selectedAnnotationId = null;
     this.error = null;
-    this.message = 'Modo explorar: usa play, pausa y seek del reproductor; luego captura el frame visible.';
+    this.message = 'Modo explorar: usa play, pausa y seek del reproductor. La próxima captura libre se registrará como manual.';
     this.render();
   }
 
@@ -369,6 +517,8 @@ export class AnnotationPanel {
     const target = this.draft.frames[index + delta];
     if (!target) return;
     this.activeFrameId = target.frameId;
+    this.exploreMediaTimeMs = target.mediaTimeMs ?? null;
+    this.pendingPlanIndex = null;
     this.selectedAnnotationId = null;
     this.interactionMode = 'annotate';
     this.render();
