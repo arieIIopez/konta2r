@@ -77,8 +77,9 @@ function close(a: number, b: number, tolerance = 1e-12): boolean {
   return Math.abs(a - b) <= tolerance;
 }
 
-function sameOptional<T>(left: T | undefined, right: T | undefined): boolean {
-  return left === undefined || right === undefined || left === right;
+function sameOptionalNumber(left: number | undefined, right: number | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return close(left, right, 1e-6);
 }
 
 function statusFor(findings: readonly ComparabilityFinding[]): BenchmarkComparability {
@@ -103,10 +104,18 @@ function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function numericArraysEqual(left: readonly number[], right: readonly number[]): boolean {
+  return left.length === right.length && left.every((value, index) => {
+    const other = right[index];
+    return other !== undefined && close(value, other);
+  });
+}
+
 function sameScaleThresholds(left: DetectorBenchmarkReport, right: DetectorBenchmarkReport): boolean {
   const a = left.benchmark.matching.imageScaleThresholds;
   const b = right.benchmark.matching.imageScaleThresholds;
-  return close(a.smallMaxHeightRatio, b.smallMaxHeightRatio)
+  return close(a.tinyMaxHeightRatio, b.tinyMaxHeightRatio)
+    && close(a.smallMaxHeightRatio, b.smallMaxHeightRatio)
     && close(a.mediumMaxHeightRatio, b.mediumMaxHeightRatio);
 }
 
@@ -171,7 +180,7 @@ function corpusFindings(left: DetectorBenchmarkReport, right: DetectorBenchmarkR
         findings.push(error('frame_identity_mismatch', `Frame distinto en posición ${index}: ${a.frameId} vs ${b.frameId}.`));
         break;
       }
-      if (!sameOptional(a.mediaTimeMs, b.mediaTimeMs)) {
+      if (!sameOptionalNumber(a.mediaTimeMs, b.mediaTimeMs)) {
         findings.push(error('media_time_mismatch', `mediaTimeMs no coincide en frame ${a.frameId}.`));
         break;
       }
@@ -200,7 +209,11 @@ function classMap(report: DetectorBenchmarkReport): Map<string, DetectorClassMet
   return new Map(report.benchmark.classMetrics.map((metric) => [metric.className, metric]));
 }
 
-function classDeltas(left: DetectorBenchmarkReport, right: DetectorBenchmarkReport): PairedClassAccuracyDelta[] {
+function classDeltas(
+  left: DetectorBenchmarkReport,
+  right: DetectorBenchmarkReport,
+  includeDeltas: boolean,
+): PairedClassAccuracyDelta[] {
   const leftMap = classMap(left);
   const rightMap = classMap(right);
   const classNames = [...new Set([...leftMap.keys(), ...rightMap.keys()])].sort();
@@ -211,7 +224,7 @@ function classDeltas(left: DetectorBenchmarkReport, right: DetectorBenchmarkRepo
       className,
       ...(a === undefined ? {} : { left: { ...a } }),
       ...(b === undefined ? {} : { right: { ...b } }),
-      ...(a === undefined || b === undefined
+      ...(!includeDeltas || a === undefined || b === undefined
         ? {}
         : {
             precisionDelta: b.precision - a.precision,
@@ -232,7 +245,7 @@ function sweepFindings(left: DetectorBenchmarkReport, right: DetectorBenchmarkRe
   if (!close(a.iouThreshold, b.iouThreshold)) {
     findings.push(error('sweep_iou_mismatch', 'Los confidence sweeps usan IoU distintos.'));
   }
-  if (!arraysEqual(a.thresholds, b.thresholds)) {
+  if (!numericArraysEqual(a.thresholds, b.thresholds)) {
     findings.push(error('sweep_thresholds_mismatch', 'Los confidence sweeps no evaluaron exactamente los mismos thresholds.'));
   }
   return findings;
@@ -259,6 +272,25 @@ function performanceFindings(left: DetectorBenchmarkReport, right: DetectorBench
   if (left.device.label !== right.device.label) {
     findings.push(error('device_label_mismatch', 'Los reportes declaran dispositivos/perfiles distintos.'));
   }
+
+  const leftRuntime = left.benchmark.detector.runtime;
+  const rightRuntime = right.benchmark.detector.runtime;
+  if (leftRuntime.runtime !== rightRuntime.runtime) {
+    findings.push(error('runtime_mismatch', 'Los reportes no usan el mismo runtime de inferencia.'));
+  }
+  if (leftRuntime.runtimeVersion !== rightRuntime.runtimeVersion) {
+    findings.push(error('runtime_version_mismatch', 'Los reportes no usan la misma versión del runtime.'));
+  }
+  if (leftRuntime.backend !== rightRuntime.backend) {
+    findings.push(error('backend_mismatch', 'Los reportes no usan el mismo backend de inferencia.'));
+  }
+  if (!arraysEqual(leftRuntime.executionProviders, rightRuntime.executionProviders)) {
+    findings.push(error('execution_providers_mismatch', 'Los execution providers no coinciden.'));
+  }
+  if (left.benchmark.latency.sampleCount !== right.benchmark.latency.sampleCount) {
+    findings.push(error('latency_sample_count_mismatch', 'Las latencias no fueron resumidas sobre el mismo número de muestras.'));
+  }
+
   const sharedChecks: Array<[string, unknown, unknown]> = [
     ['user_agent', left.device.userAgent, right.device.userAgent],
     ['hardware_concurrency', left.device.hardwareConcurrency, right.device.hardwareConcurrency],
@@ -317,6 +349,12 @@ export function compareDetectorBenchmarkReports(
   const leftLatency = left.benchmark.latency;
   const rightLatency = right.benchmark.latency;
 
+  const totalMsP50Ratio = safeRatio(rightLatency.totalMsP50, leftLatency.totalMsP50);
+  const totalMsP95Ratio = safeRatio(rightLatency.totalMsP95, leftLatency.totalMsP95);
+  const inferenceMsP50Ratio = safeRatio(rightLatency.inferenceMsP50, leftLatency.inferenceMsP50);
+  const inferenceMsP95Ratio = safeRatio(rightLatency.inferenceMsP95, leftLatency.inferenceMsP95);
+  const effectiveFpsRatio = safeRatio(rightLatency.effectiveInferenceFps, leftLatency.effectiveInferenceFps);
+
   return {
     schemaVersion: '1',
     left: {
@@ -339,7 +377,7 @@ export function compareDetectorBenchmarkReports(
             macroF1Delta: right.benchmark.macroF1 - left.benchmark.macroF1,
             matchedIoUMeanDelta: right.benchmark.matchedIoUMean - left.benchmark.matchedIoUMean,
           }),
-      byClass: classDeltas(left, right),
+      byClass: classDeltas(left, right, operatingGate.status !== 'incompatible'),
     },
     confidenceSweep: {
       gate: sweepGate,
@@ -352,21 +390,11 @@ export function compareDetectorBenchmarkReports(
       ...(performanceGate.status === 'incompatible'
         ? {}
         : {
-            ...(safeRatio(rightLatency.totalMsP50, leftLatency.totalMsP50) === undefined
-              ? {}
-              : { totalMsP50RatioRightToLeft: safeRatio(rightLatency.totalMsP50, leftLatency.totalMsP50) as number }),
-            ...(safeRatio(rightLatency.totalMsP95, leftLatency.totalMsP95) === undefined
-              ? {}
-              : { totalMsP95RatioRightToLeft: safeRatio(rightLatency.totalMsP95, leftLatency.totalMsP95) as number }),
-            ...(safeRatio(rightLatency.inferenceMsP50, leftLatency.inferenceMsP50) === undefined
-              ? {}
-              : { inferenceMsP50RatioRightToLeft: safeRatio(rightLatency.inferenceMsP50, leftLatency.inferenceMsP50) as number }),
-            ...(safeRatio(rightLatency.inferenceMsP95, leftLatency.inferenceMsP95) === undefined
-              ? {}
-              : { inferenceMsP95RatioRightToLeft: safeRatio(rightLatency.inferenceMsP95, leftLatency.inferenceMsP95) as number }),
-            ...(safeRatio(rightLatency.effectiveInferenceFps, leftLatency.effectiveInferenceFps) === undefined
-              ? {}
-              : { effectiveInferenceFpsRatioRightToLeft: safeRatio(rightLatency.effectiveInferenceFps, leftLatency.effectiveInferenceFps) as number }),
+            ...(totalMsP50Ratio === undefined ? {} : { totalMsP50RatioRightToLeft: totalMsP50Ratio }),
+            ...(totalMsP95Ratio === undefined ? {} : { totalMsP95RatioRightToLeft: totalMsP95Ratio }),
+            ...(inferenceMsP50Ratio === undefined ? {} : { inferenceMsP50RatioRightToLeft: inferenceMsP50Ratio }),
+            ...(inferenceMsP95Ratio === undefined ? {} : { inferenceMsP95RatioRightToLeft: inferenceMsP95Ratio }),
+            ...(effectiveFpsRatio === undefined ? {} : { effectiveInferenceFpsRatioRightToLeft: effectiveFpsRatio }),
             latencyDriftDelta: rightLatency.latencyDriftRatio - leftLatency.latencyDriftRatio,
           }),
     },
