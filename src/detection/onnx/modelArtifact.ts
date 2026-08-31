@@ -5,7 +5,7 @@ export interface VerifiedOnnxArtifact {
 }
 
 export type ArtifactFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-export type Sha256Digest = (bytes: Uint8Array) => Promise<string>;
+export type Sha256Digest = (buffer: ArrayBuffer) => Promise<string>;
 
 function normalizeSha256(value: string): string {
   const normalized = value.trim().toLowerCase();
@@ -15,20 +15,26 @@ function normalizeSha256(value: string): string {
   return normalized;
 }
 
-function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-}
-
-export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  if (!globalThis.crypto?.subtle) {
-    throw new Error('Web Crypto SubtleCrypto is required to verify ONNX artifacts');
-  }
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', copyToArrayBuffer(bytes));
+function digestBytesToHex(digest: ArrayBuffer): string {
   return [...new Uint8Array(digest)]
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('');
+}
+
+export async function sha256ArrayBufferHex(buffer: ArrayBuffer): Promise<string> {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error('Web Crypto SubtleCrypto is required to verify ONNX artifacts');
+  }
+  return digestBytesToHex(await globalThis.crypto.subtle.digest('SHA-256', buffer));
+}
+
+/** Convenience helper for small/in-memory byte views. The model-download path
+ * hashes its original ArrayBuffer directly to avoid duplicating a large model.
+ */
+export async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return sha256ArrayBufferHex(buffer);
 }
 
 /**
@@ -46,23 +52,22 @@ export async function fetchVerifiedOnnxArtifact(
 ): Promise<VerifiedOnnxArtifact> {
   const expected = normalizeSha256(expectedSha256);
   const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
-  const digest = options.digest ?? sha256Hex;
+  const digest = options.digest ?? sha256ArrayBufferHex;
   const response = await fetcher(url, { cache: 'no-store' });
   if (!response.ok) {
     throw new Error(`ONNX artifact download failed with HTTP ${response.status}`);
   }
 
   const buffer = await response.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  if (bytes.byteLength === 0) throw new Error('ONNX artifact is empty');
-  const actualSha256 = (await digest(bytes)).toLowerCase();
+  if (buffer.byteLength === 0) throw new Error('ONNX artifact is empty');
+  const actualSha256 = (await digest(buffer)).toLowerCase();
   if (actualSha256 !== expected) {
     throw new Error(`ONNX artifact SHA-256 mismatch: expected ${expected}, received ${actualSha256}`);
   }
 
   return {
-    bytes,
+    bytes: new Uint8Array(buffer),
     sha256: actualSha256,
-    sizeBytes: bytes.byteLength,
+    sizeBytes: buffer.byteLength,
   };
 }
