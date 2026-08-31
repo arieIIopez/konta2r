@@ -26,6 +26,6 @@ describe('local node binding persistence policy', () => {
 
   it('states explicitly that cached local status is not authorization authority', () => {
     expect(bindingContract).toMatch(/Backend node state remains authoritative/i);
-    expect(bindingContract).toMatch(/never establishes server\s+authorization/i);
+    expect(bindingContract).toMatch(/never establishes server\s+authorization/is);
   });
 });
