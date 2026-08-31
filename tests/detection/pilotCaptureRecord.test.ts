@@ -56,6 +56,19 @@ describe('pilot capture record', () => {
     expect(parsed.camera).not.toHaveProperty('deviceId');
   });
 
+  it('preserves local media identity without embedding video bytes', () => {
+    const value = record({
+      media: {
+        sha256: 'a'.repeat(64),
+        sizeBytes: 12_345_678,
+        mimeType: 'video/webm;codecs=vp8',
+      },
+    });
+    const parsed = parsePilotCaptureRecordJson(serializePilotCaptureRecord(value));
+    expect(parsed.media).toEqual(value.media);
+    expect(JSON.stringify(parsed)).not.toContain('videoBytes');
+  });
+
   it('rejects address-like and coordinate-like opaque identifiers', () => {
     expect(() => validatePilotCaptureRecord(record({ siteId: 'Avenida Siempre Viva 123' })))
       .toThrow('opaque');
