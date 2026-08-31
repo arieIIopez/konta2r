@@ -67,6 +67,7 @@ export interface DirectedLine {
 }
 
 export type CrossingDirection = 'LEFT_TO_RIGHT' | 'RIGHT_TO_LEFT';
+export type CrossingPointSpace = 'image' | 'normalized_image' | 'local_ground';
 
 export interface LineCrossingEvent {
   eventId: string;
@@ -78,5 +79,7 @@ export interface LineCrossingEvent {
   geometryId: string;
   direction: CrossingDirection;
   crossingPoint: Point2D;
+  /** Explicit when the producer knows the coordinate domain. Legacy events may omit it. */
+  crossingPointSpace?: CrossingPointSpace;
   confidence: number;
 }
