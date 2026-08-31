@@ -78,10 +78,12 @@ const source = {} as CanvasImageSource;
 
 describe('edge mobility pipeline', () => {
   it('turns rider detections into one confirmed cyclist crossing event', async () => {
+    // The synthetic trajectory deliberately stays within the tracker's initial
+    // spatial gate before velocity has been estimated, then crosses x=0.5.
     const detector = new MockDetector([
-      riderFrame(350),
-      riderFrame(550),
-      riderFrame(650),
+      riderFrame(420),
+      riderFrame(470),
+      riderFrame(530),
     ]);
     const pipeline = new EdgeMobilityPipeline(detector, {
       sessionId: 'session_test',
