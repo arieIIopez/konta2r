@@ -1,12 +1,18 @@
-import type { MobilityProcessedFrame, MobilityFrameProcessor } from '../pipeline/frameProcessor';
+import type { DetectorInput } from '../detection/types';
 
 export type InferenceLoopState = 'idle' | 'initializing' | 'running' | 'stopped' | 'error';
 
-export interface NodeInferenceLoopOptions {
+export interface InferenceFrameProcessor<TFrame> {
+  initialize(): Promise<unknown>;
+  process(input: DetectorInput): Promise<TFrame>;
+  dispose(): Promise<void> | void;
+}
+
+export interface NodeInferenceLoopOptions<TFrame> {
   targetFps?: number;
   maxConsecutiveErrors?: number;
   processWhenHidden?: boolean;
-  onFrame?: (frame: MobilityProcessedFrame) => void;
+  onFrame?: (frame: TFrame) => void;
   onProcessingSample?: (processingMs: number, monotonicTimestampMs: number) => void;
   onError?: (error: Error, consecutiveErrors: number) => void;
   onStateChange?: (state: InferenceLoopState) => void;
@@ -19,15 +25,15 @@ function normalizeTargetFps(value: number): number {
 
 /**
  * Schedules edge inference at a target frequency without ever overlapping two
- * detector calls. When inference takes longer than the frame budget, the next
+ * processor calls. When processing takes longer than the frame budget, the next
  * iteration starts only after the previous one completes; downstream health
  * monitoring can then downgrade the node profile.
  */
-export class NodeInferenceLoop {
-  private readonly processor: MobilityFrameProcessor;
+export class NodeInferenceLoop<TFrame> {
+  private readonly processor: InferenceFrameProcessor<TFrame>;
   private readonly maxConsecutiveErrors: number;
   private readonly processWhenHidden: boolean;
-  private readonly onFrame?: (frame: MobilityProcessedFrame) => void;
+  private readonly onFrame?: (frame: TFrame) => void;
   private readonly onProcessingSample?: (processingMs: number, monotonicTimestampMs: number) => void;
   private readonly onError?: (error: Error, consecutiveErrors: number) => void;
   private readonly onStateChange?: (state: InferenceLoopState) => void;
@@ -38,7 +44,10 @@ export class NodeInferenceLoop {
   private runToken = 0;
   private consecutiveErrors = 0;
 
-  constructor(processor: MobilityFrameProcessor, options: NodeInferenceLoopOptions = {}) {
+  constructor(
+    processor: InferenceFrameProcessor<TFrame>,
+    options: NodeInferenceLoopOptions<TFrame> = {},
+  ) {
     this.processor = processor;
     this.targetFps = normalizeTargetFps(options.targetFps ?? 5);
     this.maxConsecutiveErrors = Math.max(1, Math.floor(options.maxConsecutiveErrors ?? 3));
@@ -76,7 +85,7 @@ export class NodeInferenceLoop {
       this.schedule(0, token);
     } catch (error) {
       if (token !== this.runToken) return;
-      const normalized = error instanceof Error ? error : new Error('detector_initialization_failed');
+      const normalized = error instanceof Error ? error : new Error('processor_initialization_failed');
       this.setState('error');
       this.onError?.(normalized, 1);
     }
