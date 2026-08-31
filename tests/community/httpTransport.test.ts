@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { generateNodeCredential } from '../../src/backend/nodeCredential';
 import { createCommunityHttpSender } from '../../src/community/httpTransport';
 import { computeNodeQuality } from '../../src/community/quality';
 import type { CommunityUploadEnvelope } from '../../src/community/protocol';
@@ -39,12 +40,17 @@ function envelope(): CommunityUploadEnvelope {
   };
 }
 
+function validCredential(): string {
+  return generateNodeCredential((bytes) => bytes.fill(31));
+}
+
 describe('community HTTP transport', () => {
-  it('sends idempotency and methodology headers without changing the payload', async () => {
+  it('sends node authorization, idempotency and methodology headers without changing the payload', async () => {
     let capturedInit: RequestInit | undefined;
+    const token = validCredential();
     const sender = createCommunityHttpSender({
       endpoint: 'https://example.test/community',
-      accessToken: () => 'token-test',
+      nodeCredential: () => token,
       fetchImpl: async (_input, init) => {
         capturedInit = init;
         return new Response('', { status: 202 });
@@ -57,14 +63,51 @@ describe('community HTTP transport', () => {
 
     expect(result.ok).toBe(true);
     expect(headers?.['idempotency-key']).toBe('node_transport1:9');
-    expect(headers?.authorization).toBe('Bearer token-test');
+    expect(headers?.authorization).toBe(`Konta2rNode ${token}`);
+    expect(headers?.authorization).not.toMatch(/^Bearer /);
     expect(headers?.['x-konta2r-methodology']).toBe('2.0');
     expect(JSON.parse(String(capturedInit?.body))).toEqual(payload);
+  });
+
+  it('fails closed before fetch when the sensor credential is missing or looks like a human token', async () => {
+    let calls = 0;
+    for (const nodeCredential of [
+      () => undefined,
+      () => 'eyJhbGciOiJIUzI1NiJ9.human-jwt',
+      () => 'sb_publishable_example',
+    ]) {
+      const sender = createCommunityHttpSender({
+        endpoint: 'https://example.test/community',
+        nodeCredential,
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response('', { status: 202 });
+        },
+      });
+      const result = await sender(envelope(), 'node_transport1:9');
+      expect(result.ok).toBe(false);
+      expect(result.retryable).toBe(false);
+      expect(result.statusCode).toBe(401);
+    }
+    expect(calls).toBe(0);
+  });
+
+  it('requires HTTPS outside localhost', () => {
+    expect(() => createCommunityHttpSender({
+      endpoint: 'http://example.test/community',
+      nodeCredential: validCredential,
+    })).toThrow('HTTPS');
+
+    expect(() => createCommunityHttpSender({
+      endpoint: 'http://localhost:54321/functions/v1/ingest-community',
+      nodeCredential: validCredential,
+    })).not.toThrow();
   });
 
   it('treats overload/server responses as retryable', async () => {
     const sender = createCommunityHttpSender({
       endpoint: 'https://example.test/community',
+      nodeCredential: validCredential,
       fetchImpl: async () => new Response('', { status: 503 }),
     });
 
@@ -76,6 +119,7 @@ describe('community HTTP transport', () => {
   it('treats schema/client errors as permanent', async () => {
     const sender = createCommunityHttpSender({
       endpoint: 'https://example.test/community',
+      nodeCredential: validCredential,
       fetchImpl: async () => new Response('', { status: 422 }),
     });
 
@@ -87,6 +131,7 @@ describe('community HTTP transport', () => {
   it('treats network exceptions as retryable', async () => {
     const sender = createCommunityHttpSender({
       endpoint: 'https://example.test/community',
+      nodeCredential: validCredential,
       fetchImpl: async () => { throw new Error('offline'); },
     });
 

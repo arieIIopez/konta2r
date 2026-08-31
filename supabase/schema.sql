@@ -112,6 +112,7 @@ create table if not exists private.community_batches (
   batch_id uuid primary key default gen_random_uuid(),
   node_id text not null references public.nodes(node_id) on delete restrict,
   sequence bigint not null,
+  payload_sha256 text not null,
   generated_at timestamptz not null,
   observed_segment_id text not null references public.segments(segment_id) on update cascade on delete restrict,
   observed_segment_source text not null,
@@ -123,6 +124,7 @@ create table if not exists private.community_batches (
   runtime_summary jsonb not null,
   received_at timestamptz not null default now(),
   constraint community_batches_sequence check (sequence >= 0),
+  constraint community_batches_payload_sha256 check (payload_sha256 ~ '^[a-f0-9]{64}$'),
   constraint community_batches_segment_source check (
     observed_segment_source in ('osm', 'konta2r', 'municipal', 'other')
   ),
