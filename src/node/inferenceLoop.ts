@@ -45,6 +45,8 @@ export class NodeInferenceLoop<TFrame> {
   private timerId: number | null = null;
   private runToken = 0;
   private consecutiveErrors = 0;
+  private initialized = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(
     processor: InferenceFrameProcessor<TFrame>,
@@ -81,7 +83,7 @@ export class NodeInferenceLoop<TFrame> {
     this.setState('initializing');
 
     try {
-      await this.processor.initialize();
+      await this.ensureInitialized();
       if (token !== this.runToken) return;
       this.setState('running');
       this.schedule(0, token);
@@ -103,8 +105,37 @@ export class NodeInferenceLoop<TFrame> {
 
   async dispose(): Promise<void> {
     this.stop();
+    const pendingInitialization = this.initializationPromise;
+    if (pendingInitialization) {
+      try {
+        await pendingInitialization;
+      } catch {
+        // Initialization failed; dispose still gets a chance to release partial resources.
+      }
+    }
     await this.processor.dispose();
+    this.initialized = false;
+    this.initializationPromise = null;
     this.setState('idle');
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+    if (!this.initializationPromise) {
+      this.initializationPromise = (async () => {
+        await this.processor.initialize();
+        this.initialized = true;
+      })();
+    }
+
+    try {
+      await this.initializationPromise;
+    } catch (error) {
+      this.initialized = false;
+      throw error;
+    } finally {
+      this.initializationPromise = null;
+    }
   }
 
   private schedule(delayMs: number, token: number): void {
