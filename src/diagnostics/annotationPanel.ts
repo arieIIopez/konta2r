@@ -24,11 +24,7 @@ interface DraftRectangle {
   endY: number;
 }
 
-interface VideoWithFrameCallback extends HTMLVideoElement {
-  requestVideoFrameCallback?: (
-    callback: (now: number, metadata: { mediaTime: number }) => void,
-  ) => number;
-}
+type AnnotationInteractionMode = 'explore' | 'annotate';
 
 function safeFilePart(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'annotations';
@@ -60,8 +56,7 @@ function html(value: string): string {
 }
 
 async function presentedMediaTimeMs(video: HTMLVideoElement): Promise<number> {
-  const candidate = video as VideoWithFrameCallback;
-  if (!candidate.requestVideoFrameCallback) return video.currentTime * 1000;
+  if (typeof video.requestVideoFrameCallback !== 'function') return video.currentTime * 1000;
   return new Promise<number>((resolve) => {
     let settled = false;
     const finish = (value: number) => {
@@ -71,7 +66,9 @@ async function presentedMediaTimeMs(video: HTMLVideoElement): Promise<number> {
       resolve(value);
     };
     const fallback = window.setTimeout(() => finish(video.currentTime * 1000), 250);
-    candidate.requestVideoFrameCallback?.((_now, metadata) => finish(metadata.mediaTime * 1000));
+    video.requestVideoFrameCallback((_now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {
+      finish(metadata.mediaTime * 1000);
+    });
   });
 }
 
@@ -106,6 +103,7 @@ export class AnnotationPanel {
   private videoFile: File | null = null;
   private videoUrl: string | null = null;
   private drawing: DraftRectangle | null = null;
+  private interactionMode: AnnotationInteractionMode = 'explore';
   private className: DetectorGroundTruthClass = 'person';
   private occlusion: GroundTruthOcclusion = 'none';
   private ignore = false;
@@ -120,6 +118,7 @@ export class AnnotationPanel {
 
   destroy(): void {
     this.destroyed = true;
+    window.removeEventListener('keydown', this.handleKeyDown);
     this.revokeVideoUrl();
     this.mountElement?.replaceChildren();
     this.mountElement = null;
@@ -134,7 +133,10 @@ export class AnnotationPanel {
     if (!mount || this.destroyed) return;
     const frame = this.activeFrame();
     const activeIndex = frame ? this.draft.frames.findIndex((value) => value.frameId === frame.frameId) : -1;
-    const videoLabel = this.videoFile ? `${html(this.videoFile.name)} · ${(this.videoFile.size / 1048576).toFixed(1)} MB` : 'Ningún video seleccionado';
+    const videoLabel = this.videoFile
+      ? `${html(this.videoFile.name)} · ${(this.videoFile.size / 1048576).toFixed(1)} MB`
+      : 'Ningún video seleccionado';
+    const annotating = this.interactionMode === 'annotate';
 
     mount.innerHTML = `
       <section class="node-runtime-shell annotation-shell">
@@ -156,18 +158,21 @@ export class AnnotationPanel {
 
         <div class="annotation-workspace">
           <div class="annotation-stage-wrap">
-            <div class="annotation-stage">
+            <div class="annotation-stage ${annotating ? 'is-annotating' : 'is-exploring'}">
               <video data-annotation-player controls muted playsinline preload="metadata"></video>
-              <canvas data-annotation-canvas></canvas>
+              <canvas data-annotation-canvas aria-label="Capa de cajas de ground truth"></canvas>
+              <div class="annotation-mode-badge">${annotating ? 'Anotando frame' : 'Explorando video'}</div>
               ${this.videoFile ? '' : '<div class="annotation-placeholder">El video permanece local en este navegador.</div>'}
             </div>
             <div class="annotation-stage-toolbar">
-              <button class="action primary" data-capture-frame type="button" ${this.videoFile ? '' : 'disabled'}>Capturar frame visible</button>
+              ${annotating
+                ? `<button class="action primary" data-explore-video type="button" ${this.videoFile ? '' : 'disabled'}>Explorar otro frame</button>`
+                : `<button class="action primary" data-capture-frame type="button" ${this.videoFile ? '' : 'disabled'}>Capturar frame visible</button>`}
               <button class="action secondary" data-prev-frame type="button" ${activeIndex > 0 ? '' : 'disabled'}>← Frame anterior</button>
               <button class="action secondary" data-next-frame type="button" ${activeIndex >= 0 && activeIndex < this.draft.frames.length - 1 ? '' : 'disabled'}>Frame siguiente →</button>
               <button class="action secondary" data-remove-frame type="button" ${frame ? '' : 'disabled'}>Eliminar frame</button>
             </div>
-            <p class="runtime-note">Para anotar: pausa el video, captura el frame visible y arrastra sobre la imagen. El JSON guarda <code>bbox</code> en píxeles fuente, no en píxeles CSS. <code>timestampMs</code> se inicializa igual a <code>mediaTimeMs</code>, manteniéndose como campos semánticamente distintos.</p>
+            <p class="runtime-note">En <strong>Explorar video</strong> los controles del reproductor quedan libres. Al capturar un frame se entra en <strong>Anotar frame</strong> y el canvas recibe el puntero. Presiona <kbd>Esc</kbd> para volver a explorar. Las cajas se guardan en píxeles fuente, no en píxeles CSS.</p>
           </div>
 
           <aside class="annotation-sidebar">
@@ -247,6 +252,7 @@ export class AnnotationPanel {
       this.ignore = (event.currentTarget as HTMLInputElement).checked;
     });
     mount.querySelector<HTMLButtonElement>('[data-capture-frame]')?.addEventListener('click', () => void this.captureFrame());
+    mount.querySelector<HTMLButtonElement>('[data-explore-video]')?.addEventListener('click', () => this.exploreVideo());
     mount.querySelector<HTMLButtonElement>('[data-prev-frame]')?.addEventListener('click', () => void this.navigateFrame(-1));
     mount.querySelector<HTMLButtonElement>('[data-next-frame]')?.addEventListener('click', () => void this.navigateFrame(1));
     mount.querySelector<HTMLButtonElement>('[data-remove-frame]')?.addEventListener('click', () => this.removeFrame());
@@ -267,7 +273,8 @@ export class AnnotationPanel {
       this.drawing = null;
       this.drawOverlay();
     });
-    window.addEventListener('keydown', this.handleKeyDown, { once: true });
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keydown', this.handleKeyDown);
   }
 
   private configureVideoAfterRender(): void {
@@ -292,6 +299,8 @@ export class AnnotationPanel {
   private async loadVideo(file: File | null): Promise<void> {
     this.revokeVideoUrl();
     this.videoFile = file;
+    this.interactionMode = 'explore';
+    this.drawing = null;
     this.error = null;
     if (!file) {
       this.message = 'Video removido. Las anotaciones permanecen en memoria local.';
@@ -299,7 +308,7 @@ export class AnnotationPanel {
       return;
     }
     this.videoUrl = URL.createObjectURL(file);
-    this.message = `${file.name} cargado localmente. Busca una escena representativa y captura el frame.`;
+    this.message = `${file.name} cargado localmente. Explora el video y captura una escena representativa.`;
     this.render();
   }
 
@@ -310,6 +319,7 @@ export class AnnotationPanel {
       this.draft = restoreAnnotationDraft(sequence);
       this.activeFrameId = this.draft.frames[0]?.frameId ?? null;
       this.selectedAnnotationId = null;
+      this.interactionMode = this.activeFrameId ? 'annotate' : 'explore';
       this.error = null;
       this.message = `${file.name} importado · ${this.draft.frames.length} frames.`;
     } catch (error) {
@@ -336,8 +346,19 @@ export class AnnotationPanel {
     });
     this.activeFrameId = frame.frameId;
     this.selectedAnnotationId = null;
+    this.interactionMode = 'annotate';
     this.error = null;
     this.message = `${frame.frameId} capturado en ${formatTime(frame.mediaTimeMs)}. Arrastra sobre la imagen para crear cajas.`;
+    this.render();
+  }
+
+  private exploreVideo(): void {
+    if (!this.videoFile) return;
+    this.interactionMode = 'explore';
+    this.drawing = null;
+    this.selectedAnnotationId = null;
+    this.error = null;
+    this.message = 'Modo explorar: usa play, pausa y seek del reproductor; luego captura el frame visible.';
     this.render();
   }
 
@@ -349,6 +370,7 @@ export class AnnotationPanel {
     if (!target) return;
     this.activeFrameId = target.frameId;
     this.selectedAnnotationId = null;
+    this.interactionMode = 'annotate';
     this.render();
     const video = this.mountElement?.querySelector<HTMLVideoElement>('[data-annotation-player]');
     if (video && target.mediaTimeMs !== undefined) {
@@ -369,6 +391,7 @@ export class AnnotationPanel {
     removeAnnotationFrame(this.draft, frame.frameId);
     this.activeFrameId = this.draft.frames[Math.min(index, this.draft.frames.length - 1)]?.frameId ?? null;
     this.selectedAnnotationId = null;
+    if (!this.activeFrameId) this.interactionMode = 'explore';
     this.message = `${frame.frameId} eliminado.`;
     this.render();
   }
@@ -382,6 +405,7 @@ export class AnnotationPanel {
   }
 
   private pointerDown(event: PointerEvent): void {
+    if (this.interactionMode !== 'annotate') return;
     const canvas = event.currentTarget as HTMLCanvasElement;
     if (!this.activeFrame() || canvas.width <= 0 || canvas.height <= 0) return;
     const point = this.pointerPosition(event, canvas);
@@ -390,7 +414,7 @@ export class AnnotationPanel {
   }
 
   private pointerMove(event: PointerEvent): void {
-    if (!this.drawing) return;
+    if (this.interactionMode !== 'annotate' || !this.drawing) return;
     const canvas = event.currentTarget as HTMLCanvasElement;
     const point = this.pointerPosition(event, canvas);
     this.drawing.endX = point.x;
@@ -399,6 +423,7 @@ export class AnnotationPanel {
   }
 
   private pointerUp(event: PointerEvent): void {
+    if (this.interactionMode !== 'annotate') return;
     const drawing = this.drawing;
     const frame = this.activeFrame();
     const canvas = event.currentTarget as HTMLCanvasElement;
@@ -481,11 +506,19 @@ export class AnnotationPanel {
 
   private handleKeyDown = (event: KeyboardEvent): void => {
     if (this.destroyed) return;
-    if (event.key !== 'Delete' && event.key !== 'Backspace') return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) return;
+
+    if (event.key === 'Escape' && this.interactionMode === 'annotate') {
+      event.preventDefault();
+      this.exploreVideo();
+      return;
+    }
+
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return;
     const frame = this.activeFrame();
     if (!frame || !this.selectedAnnotationId) return;
+    event.preventDefault();
     if (removeGroundTruthObject(this.draft, frame.frameId, this.selectedAnnotationId)) {
       this.message = `${this.selectedAnnotationId} eliminado.`;
       this.selectedAnnotationId = null;
