@@ -114,7 +114,10 @@ describe('external benchmark confidence analysis', () => {
       truePositive: 1, falsePositive: 1, falseNegative: 0, precision: 0.5, recall: 1,
     });
     expect(result.report.confidence?.sweep.bestObservedMacroF1).toEqual({ threshold: 0.5, macroF1: 1 });
-    expect(result.validity.status).toBe('valid');
+    expect(result.validity.status).toBe('provisional');
+    expect(result.validity.findings).toContainEqual(expect.objectContaining({
+      code: 'manifest_link_missing', severity: 'warning',
+    }));
   });
 
   it('rejects a sweep below the adapter retention floor before creating an ONNX session', async () => {
