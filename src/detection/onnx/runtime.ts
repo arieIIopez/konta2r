@@ -6,12 +6,22 @@ export const ONNX_RUNTIME_WEB_VERSION = '1.29.0';
 export type OnnxExecutionProvider = 'webgpu' | 'wasm';
 export type OnnxModelSource = string | Uint8Array;
 export type OnnxValueMap = Record<string, unknown>;
+export type OnnxValueKind = 'tensor' | 'non_tensor' | 'unknown';
+
+export interface OnnxValueMetadata {
+  name: string;
+  kind: OnnxValueKind;
+  type?: string;
+  shape?: readonly (string | number)[];
+}
 
 export interface OnnxSessionLike {
   run(feeds: OnnxValueMap): Promise<OnnxValueMap>;
   release(): Promise<void> | void;
   readonly inputNames?: readonly string[];
   readonly outputNames?: readonly string[];
+  readonly inputMetadata?: readonly OnnxValueMetadata[];
+  readonly outputMetadata?: readonly OnnxValueMetadata[];
 }
 
 export interface OnnxSessionFactory {
@@ -36,6 +46,20 @@ function normalizedError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function mapValueMetadata(metadata: readonly ort.InferenceSession.ValueMetadata[]): OnnxValueMetadata[] {
+  return metadata.map((value) => value.isTensor
+    ? {
+        name: value.name,
+        kind: 'tensor',
+        type: String(value.type),
+        shape: [...value.shape],
+      }
+    : {
+        name: value.name,
+        kind: 'non_tensor',
+      });
+}
+
 export function detectOnnxRuntimeCapabilities(
   candidate: Navigator | undefined = typeof navigator === 'undefined' ? undefined : navigator,
 ): OnnxRuntimeCapabilities {
@@ -51,6 +75,14 @@ class BrowserOnnxSession implements OnnxSessionLike {
 
   get outputNames(): readonly string[] {
     return this.session.outputNames;
+  }
+
+  get inputMetadata(): readonly OnnxValueMetadata[] {
+    return mapValueMetadata(this.session.inputMetadata);
+  }
+
+  get outputMetadata(): readonly OnnxValueMetadata[] {
+    return mapValueMetadata(this.session.outputMetadata);
   }
 
   async run(feeds: OnnxValueMap): Promise<OnnxValueMap> {
