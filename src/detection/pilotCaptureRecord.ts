@@ -44,11 +44,18 @@ export interface PilotCaptureRecord {
     powerSource: CapturePowerSource;
     userAgent?: string;
   };
+  /** Identity of the locally recorded clip. No video bytes are embedded. */
+  media?: {
+    sha256: string;
+    sizeBytes: number;
+    mimeType: string;
+  };
   notes?: string[];
 }
 
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const COORDINATE_PAIR = /-?\d{1,2}(?:[._]\d{4,})[-_;,]+-?\d{1,3}(?:[._]\d{4,})/;
+const SHA256 = /^[a-f0-9]{64}$/i;
 const SPLITS: readonly CorpusSplit[] = ['development', 'validation', 'held_out_test'];
 const SCENES: readonly CorpusSceneType[] = [
   'protected_cycleway', 'unprotected_cycleway', 'mixed_traffic', 'intersection',
@@ -103,6 +110,12 @@ export function validatePilotCaptureRecord(record: PilotCaptureRecord): void {
   }
   if (record.device.deviceMemoryGiB !== undefined) assertPositiveFinite(record.device.deviceMemoryGiB, 'deviceMemoryGiB');
   assertEnum(record.device.powerSource, POWER, 'powerSource');
+
+  if (record.media) {
+    if (!SHA256.test(record.media.sha256)) throw new Error('media.sha256 must be a SHA-256 hex digest');
+    if (!Number.isInteger(record.media.sizeBytes) || record.media.sizeBytes <= 0) throw new Error('media.sizeBytes must be a positive integer');
+    if (record.media.mimeType.trim().length === 0) throw new Error('media.mimeType is required');
+  }
 
   if (record.notes) {
     if (record.notes.length > 20) throw new Error('Pilot capture record supports at most 20 notes');
