@@ -1,10 +1,13 @@
 import { NodeCameraController, type CameraRuntimeState } from './camera';
 import {
+  AdaptiveNodeProfileController,
+  NODE_PROFILE_SETTINGS,
   chooseInitialNodeProfile,
   detectDeviceCapabilityHints,
   type DeviceCapabilityHints,
   type NodePerformanceProfile,
 } from './deviceProfile';
+import { NodeHealthMonitor, type NodeHealthSnapshot } from './healthMonitor';
 import { inspectNodeStorage, type NodeStorageHealth } from './storageHealth';
 import { ScreenWakeLockController, type WakeLockState } from './wakeLock';
 
@@ -16,6 +19,7 @@ export interface NodeRuntimeSnapshot {
   camera: CameraRuntimeState;
   wakeLock: WakeLockState;
   storage: NodeStorageHealth | null;
+  health: NodeHealthSnapshot;
   online: boolean;
   secureContext: boolean;
   error?: string;
@@ -23,23 +27,35 @@ export interface NodeRuntimeSnapshot {
 
 export type NodeRuntimeListener = (snapshot: NodeRuntimeSnapshot) => void;
 
+type ProfileChangeSource = 'manual' | 'adaptive';
+
 export class NodeRuntimeController {
   private readonly camera = new NodeCameraController();
   private readonly wakeLock = new ScreenWakeLockController();
   private readonly listeners = new Set<NodeRuntimeListener>();
   private readonly hints = detectDeviceCapabilityHints();
+  private healthMonitor: NodeHealthMonitor;
+  private profileController: AdaptiveNodeProfileController;
+  private lastAdaptationEvaluationMs = 0;
   private video: HTMLVideoElement | null = null;
   private state: NodeRuntimeSnapshot;
 
   constructor() {
+    const profile = chooseInitialNodeProfile(this.hints);
+    this.healthMonitor = new NodeHealthMonitor({
+      expectedFps: NODE_PROFILE_SETTINGS[profile].inferenceFps,
+      windowMs: 60_000,
+    });
+    this.profileController = new AdaptiveNodeProfileController(profile);
     this.state = {
       running: false,
       busy: false,
-      profile: chooseInitialNodeProfile(this.hints),
+      profile,
       hints: { ...this.hints },
       camera: { active: false },
       wakeLock: this.wakeLock.state(),
       storage: null,
+      health: this.healthMonitor.snapshot(performance.now()),
       online: navigator.onLine,
       secureContext: window.isSecureContext,
     };
@@ -64,7 +80,25 @@ export class NodeRuntimeController {
       camera: { ...this.state.camera },
       wakeLock: { ...this.state.wakeLock },
       storage: this.state.storage ? { ...this.state.storage } : null,
+      health: { ...this.state.health },
     };
+  }
+
+  /** Called by the detector loop after each completed inference. */
+  recordInferenceSample(processingMs: number, timestampMs = performance.now()): void {
+    this.healthMonitor.record({ timestampMs, processingMs });
+    const health = this.healthMonitor.snapshot(timestampMs);
+    this.state.health = health;
+    this.emit();
+
+    if (health.sampleCount < 10 || timestampMs - this.lastAdaptationEvaluationMs < 10_000) return;
+    this.lastAdaptationEvaluationMs = timestampMs;
+    const decision = this.profileController.observe({
+      observedFps: health.observedFps,
+      processingLatencyP95Ms: health.processingLatencyP95Ms,
+      droppedFrameRatio: health.droppedFrameRatio,
+    });
+    if (decision.changed) void this.setProfile(decision.profile, 'adaptive');
   }
 
   async inspectStorage(requestPersistence = false): Promise<void> {
@@ -105,9 +139,14 @@ export class NodeRuntimeController {
     this.patch({ running: false, busy: false });
   }
 
-  async setProfile(profile: NodePerformanceProfile): Promise<void> {
+  async setProfile(
+    profile: NodePerformanceProfile,
+    source: ProfileChangeSource = 'manual',
+  ): Promise<void> {
     if (profile === this.state.profile) return;
     this.state.profile = profile;
+    this.healthMonitor.setExpectedFps(NODE_PROFILE_SETTINGS[profile].inferenceFps);
+    if (source === 'manual') this.profileController = new AdaptiveNodeProfileController(profile);
     this.emit();
     if (!this.state.running || !this.video) return;
 
