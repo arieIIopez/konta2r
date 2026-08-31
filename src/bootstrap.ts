@@ -1,3 +1,4 @@
+import './node.css';
 import './main';
 import { NodePanel } from './node/nodePanel';
 import { registerKonta2rServiceWorker } from './pwa/register';
