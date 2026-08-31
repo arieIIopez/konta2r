@@ -42,8 +42,9 @@ describe('browser video benchmark frame provider', () => {
         return { currentTimeMs: 0 };
       },
     });
+    const { mediaTimeMs: _omitted, ...frameWithoutMediaTime } = frame;
 
-    await expect(provider.materialize({ ...frame, mediaTimeMs: undefined }))
+    await expect(provider.materialize(frameWithoutMediaTime))
       .rejects.toThrow('requires mediaTimeMs');
     expect(seekCalled).toBe(false);
   });
