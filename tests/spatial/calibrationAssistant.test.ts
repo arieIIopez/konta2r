@@ -12,13 +12,18 @@ function point(ix: number, iy: number, gx: number, gy: number): CalibrationCorre
   };
 }
 
+/**
+ * Exact affine/projective fixture: ground x=(image x-100)/10,
+ * ground y=(image y-100)/10. It is deliberately free from residual noise so
+ * tests of RANSAC/outliers do not confuse fixture inconsistency with solver error.
+ */
 const wellDistributed: CalibrationCorrespondence[] = [
   point(100, 100, 0, 0),
-  point(1100, 120, 100, 0),
-  point(1080, 620, 100, 50),
-  point(120, 600, 0, 50),
-  point(640, 140, 50, 4),
-  point(650, 580, 50, 46),
+  point(1100, 100, 100, 0),
+  point(1100, 600, 100, 50),
+  point(100, 600, 0, 50),
+  point(600, 150, 50, 5),
+  point(600, 550, 50, 45),
 ];
 
 describe('calibration assistant', () => {
@@ -69,6 +74,8 @@ describe('calibration assistant', () => {
     expect(report.coverage.score).toBeGreaterThan(0.6);
     expect(report.status).toBe('calibrated');
     expect(report.fit?.status).toBe('valid');
+    expect(report.fit?.inlierRatio).toBe(1);
+    expect(report.fit?.reprojectionErrorP95Meters).toBeLessThan(1e-6);
     expect(report.combinedQuality).toBeGreaterThan(0.6);
   });
 
@@ -90,5 +97,6 @@ describe('calibration assistant', () => {
 
     expect(report.fit?.inlierRatio).toBeGreaterThanOrEqual(6 / 7);
     expect(report.fit?.inlierRatio).toBeLessThan(1);
+    expect(report.fit?.reprojectionErrorP95Meters).toBeLessThan(1e-6);
   });
 });
