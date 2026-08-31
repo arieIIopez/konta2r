@@ -1,6 +1,6 @@
 export type DetectorCandidateStatus = 'probe_pending' | 'probe_verified' | 'benchmarking' | 'rejected';
 export type DetectorCandidateRole = 'legacy_baseline' | 'eco_candidate' | 'balanced_candidate' | 'performance_candidate';
-export type DetectorCandidateCodecId = 'ssd_tf_object_detection';
+export type DetectorCandidateCodecId = 'ssd_tf_object_detection' | 'nanodet_plus_gfl';
 
 export interface ExternalModelArtifact {
   url: string;
@@ -115,26 +115,24 @@ export const OPENCV_SSD_MOBILENET_V2_COCO_2026JUL: DetectorCandidateRecord = {
 };
 
 /**
- * Lightweight OpenCV Zoo NanoDet-m-plus-1.5x candidate. The Git LFS pointer in
- * the official model directory publishes the exact checkpoint SHA-256 and byte
- * size. The directory states Apache-2.0 for all files, but Konta2r keeps
- * redistributionVerified=false until its own weight-license review is closed.
- *
- * No codecId is declared yet: source code documents preprocessing/postprocess,
- * but Konta2r must first observe the actual ONNX IO contract before encoding it.
+ * Lightweight OpenCV Zoo NanoDet-m-plus-1.5x candidate. Konta2r verified the
+ * official LFS identity, observed the exact ONNX contract and executed the same
+ * checkpoint with ONNX Runtime Web/WASM. This makes it eligible for comparative
+ * benchmarking, not selected for production and not approved for redistribution.
  */
 export const OPENCV_NANODET_M_PLUS_1_5X_416: DetectorCandidateRecord = {
   id: 'opencv-nanodet-m-plus-1.5x-416-2022nov',
   displayName: 'NanoDet-m-plus-1.5x 416 — OpenCV Zoo',
   architecture: 'NanoDet-Plus / GFL anchor-free detector',
   role: 'eco_candidate',
-  status: 'probe_pending',
+  status: 'probe_verified',
   dataset: 'COCO 2017',
+  codecId: 'nanodet_plus_gfl',
   inputHint: {
     width: 416,
     height: 416,
     layout: 'NCHW',
-    evidence: 'OpenCV Zoo nanodet.py uses image_shape=(416,416) and cv2.dnn.blobFromImage after float32 mean/std normalization.',
+    evidence: 'OpenCV source documents preprocessing; Konta2r ONNX Runtime Web/WASM smoke confirms float32 input.1 [1,3,416,416].',
   },
   artifact: {
     url: 'https://github.com/opencv/opencv_zoo/raw/main/models/object_detection_nanodet/object_detection_nanodet_2022nov.onnx',
@@ -147,8 +145,10 @@ export const OPENCV_NANODET_M_PLUS_1_5X_416: DetectorCandidateRecord = {
   notes: [
     'Official OpenCV Zoo model: Nanodet-m-plus-1.5x_416.',
     'OpenCV Zoo reports COCO AP 0.304 and publishes class-level AP for mobility-relevant classes.',
-    'The official Git LFS pointer reports 3,800,954 bytes and SHA-256 4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186.',
-    'No Konta2r codec is assigned until a real ONNX probe records input/output names, types and shapes.',
+    'Konta2r verified 3,800,954 bytes and SHA-256 4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186.',
+    'Technical probe verified on 2026-08-31: ONNX Runtime Web/WASM executed float32 input.1 [1,3,416,416] and all six expected GFL heads.',
+    'Effective checkpoint levels are strides 8, 16 and 32; the fourth stride in the historical demo is not emitted by this ONNX artifact.',
+    'Probe verification does not imply accuracy acceptance, production selection or permission to redistribute weights.',
     'Do not bundle from Konta2r while redistributionVerified=false.',
   ],
   evidenceUrls: [
@@ -157,6 +157,8 @@ export const OPENCV_NANODET_M_PLUS_1_5X_416: DetectorCandidateRecord = {
     'https://github.com/opencv/opencv_zoo/blob/main/models/object_detection_nanodet/nanodet.py',
     'https://github.com/opencv/opencv_zoo/blob/main/models/object_detection_nanodet/LICENSE',
     'https://github.com/opencv/opencv_zoo/blob/main/models/object_detection_nanodet/object_detection_nanodet_2022nov.onnx',
+    'https://github.com/arieIIopez/konta2r/blob/develop/docs/evidence/nanodet-m-plus-1.5x-416.onnx-probe.json',
+    'https://github.com/arieIIopez/konta2r/blob/develop/docs/benchmarks/evidence/nanodet-m-plus-1.5x-416-ort-web-wasm-smoke.json',
   ],
 };
 
