@@ -112,7 +112,7 @@ describe('Community delivery runtime', () => {
       vault,
       outbox,
       fetchImpl: async (_input, init) => {
-        authorization = (init?.headers as Record<string, string>).authorization;
+        authorization = (init?.headers as Record<string, string> | undefined)?.authorization ?? '';
         return new Response('', { status: 202 });
       },
     });
@@ -137,7 +137,8 @@ describe('Community delivery runtime', () => {
       vault,
       outbox,
       fetchImpl: async (_input, init) => {
-        sent.push((init?.headers as Record<string, string>).authorization);
+        const authorization = (init?.headers as Record<string, string> | undefined)?.authorization;
+        if (authorization !== undefined) sent.push(authorization);
         return new Response('', { status: 202 });
       },
     });
