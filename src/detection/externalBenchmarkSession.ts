@@ -4,7 +4,7 @@ import {
   type BenchmarkDeviceIdentity,
   type DetectorBenchmarkReport,
 } from './benchmarkReport';
-import type { AnnotatedBenchmarkSequence } from './benchmarkDataset';
+import type { AnnotatedBenchmarkSequence, ImageScaleThresholds } from './benchmarkDataset';
 import {
   assessDetectorBenchmarkValidity,
   type BenchmarkValidityAssessment,
@@ -21,13 +21,21 @@ import {
   type BenchmarkFrameProvider,
   type StreamingBenchmarkProgress,
 } from './streamingBenchmark';
-import type { ImageScaleThresholds } from './benchmarkDataset';
+
+export interface ExternalBenchmarkCorpusHashes {
+  /** SHA-256 computed from the actual annotation file bytes, outside that file. */
+  annotationSha256?: string;
+  /** SHA-256 computed from the actual local video/media bytes. */
+  mediaSha256?: string;
+}
 
 export interface ExternalBenchmarkSessionOptions {
   runId: string;
   createdAtIso?: string;
   device: BenchmarkDeviceIdentity;
   notes?: readonly string[];
+  /** Externally computed file hashes override manifest values embedded in the sequence JSON. */
+  corpusHashes?: ExternalBenchmarkCorpusHashes;
   detector?: ExternalCandidateDetectorFactoryOptions;
   benchmark?: {
     iouThreshold?: number;
@@ -44,17 +52,18 @@ export interface ExternalBenchmarkSessionResult {
   redistributionVerified: boolean;
 }
 
-function corpusFromSequence(sequence: AnnotatedBenchmarkSequence): DetectorBenchmarkReport['corpus'] {
+function corpusFromSequence(
+  sequence: AnnotatedBenchmarkSequence,
+  hashes: ExternalBenchmarkCorpusHashes | undefined,
+): DetectorBenchmarkReport['corpus'] {
+  const annotationSha256 = hashes?.annotationSha256 ?? sequence.source?.annotationSha256;
+  const mediaSha256 = hashes?.mediaSha256 ?? sequence.source?.mediaSha256;
   return {
     datasetId: sequence.datasetId,
     sequenceIds: [sequence.sequenceId],
     frameCount: sequence.frames.length,
-    ...(sequence.source?.annotationSha256 === undefined
-      ? {}
-      : { annotationSha256: sequence.source.annotationSha256 }),
-    ...(sequence.source?.mediaSha256 === undefined
-      ? {}
-      : { mediaSha256: sequence.source.mediaSha256 }),
+    ...(annotationSha256 === undefined ? {} : { annotationSha256 }),
+    ...(mediaSha256 === undefined ? {} : { mediaSha256 }),
   };
 }
 
@@ -103,12 +112,18 @@ export async function runExternalCandidateBenchmarkSession(
   const report = createDetectorBenchmarkReport({
     runId: options.runId,
     ...(options.createdAtIso === undefined ? {} : { createdAtIso: options.createdAtIso }),
-    corpus: corpusFromSequence(sequence),
+    corpus: corpusFromSequence(sequence, options.corpusHashes),
     device: { ...options.device },
     benchmark,
     notes: [
       `external_candidate:${candidate.id}`,
       'Checkpoint executed from externally supplied verified bytes; not bundled by Konta2r.',
+      ...(options.corpusHashes?.annotationSha256 === undefined
+        ? []
+        : ['annotation_sha256_source:externally_computed_file_bytes']),
+      ...(options.corpusHashes?.mediaSha256 === undefined
+        ? []
+        : ['media_sha256_source:externally_computed_file_bytes']),
       ...(options.notes ?? []),
     ],
   });
