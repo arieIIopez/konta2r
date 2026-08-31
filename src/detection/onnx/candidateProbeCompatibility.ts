@@ -1,5 +1,6 @@
 import type { DetectorCandidateRecord } from '../modelCandidates';
 import type { OnnxModelProbeResult } from './modelProbe';
+import { assessNanoDetTechnicalEvidence } from './nanodetRuntimeEvidence';
 import type { OnnxRuntimeSmokeEvidence } from './runtimeSmoke';
 import { assessSsdTfTechnicalEvidence } from './ssdTfRuntimeEvidence';
 
@@ -18,11 +19,31 @@ export interface CandidateProbeCompatibility {
   warnings: string[];
 }
 
+function fromTechnicalAssessment(
+  candidate: DetectorCandidateRecord,
+  assessment: {
+    compatible: boolean;
+    confirmed: boolean;
+    errors: string[];
+    warnings: string[];
+  },
+): CandidateProbeCompatibility {
+  return {
+    schemaVersion: '1',
+    candidateId: candidate.id,
+    codecId: candidate.codecId ?? null,
+    status: assessment.compatible
+      ? assessment.confirmed ? 'compatible' : 'unconfirmed'
+      : 'incompatible',
+    errors: [...assessment.errors],
+    warnings: [...assessment.warnings],
+  };
+}
+
 /**
  * Resolves probe compatibility through the codec contract declared by the
- * candidate. Symbolic metadata can remain unconfirmed until runtime smoke
- * evidence executes the declared contract. No license or accuracy decision is
- * made here.
+ * candidate. Runtime evidence is required when a family-specific gate demands
+ * execution confirmation. No license or detector-accuracy decision is made here.
  */
 export function assessCandidateProbeCompatibility(
   candidate: DetectorCandidateRecord,
@@ -30,17 +51,17 @@ export function assessCandidateProbeCompatibility(
   runtimeSmoke?: OnnxRuntimeSmokeEvidence,
 ): CandidateProbeCompatibility {
   if (candidate.codecId === 'ssd_tf_object_detection') {
-    const assessment = assessSsdTfTechnicalEvidence(probe, runtimeSmoke);
-    return {
-      schemaVersion: '1',
-      candidateId: candidate.id,
-      codecId: candidate.codecId,
-      status: assessment.compatible
-        ? assessment.confirmed ? 'compatible' : 'unconfirmed'
-        : 'incompatible',
-      errors: [...assessment.errors],
-      warnings: [...assessment.warnings],
-    };
+    return fromTechnicalAssessment(
+      candidate,
+      assessSsdTfTechnicalEvidence(probe, runtimeSmoke),
+    );
+  }
+
+  if (candidate.codecId === 'nanodet_plus_gfl') {
+    return fromTechnicalAssessment(
+      candidate,
+      assessNanoDetTechnicalEvidence(probe, runtimeSmoke),
+    );
   }
 
   return {
