@@ -38,6 +38,14 @@ async function bootstrap(): Promise<void> {
     window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
     return;
   }
+  if (diagnostics === 'manifest') {
+    await import('./diagnostics/corpus.css');
+    const { CorpusManifestPanel } = await import('./diagnostics/corpusManifestPanel');
+    const panel = new CorpusManifestPanel();
+    panel.mount(mount);
+    window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
+    return;
+  }
 
   await import('./main');
   const { NodePanel } = await import('./node/nodePanel');
