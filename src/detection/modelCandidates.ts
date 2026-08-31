@@ -114,7 +114,54 @@ export const OPENCV_SSD_MOBILENET_V2_COCO_2026JUL: DetectorCandidateRecord = {
   ],
 };
 
+/**
+ * Lightweight OpenCV Zoo NanoDet-m-plus-1.5x candidate. The Git LFS pointer in
+ * the official model directory publishes the exact checkpoint SHA-256 and byte
+ * size. The directory states Apache-2.0 for all files, but Konta2r keeps
+ * redistributionVerified=false until its own weight-license review is closed.
+ *
+ * No codecId is declared yet: source code documents preprocessing/postprocess,
+ * but Konta2r must first observe the actual ONNX IO contract before encoding it.
+ */
+export const OPENCV_NANODET_M_PLUS_1_5X_416: DetectorCandidateRecord = {
+  id: 'opencv-nanodet-m-plus-1.5x-416-2022nov',
+  displayName: 'NanoDet-m-plus-1.5x 416 — OpenCV Zoo',
+  architecture: 'NanoDet-Plus / GFL anchor-free detector',
+  role: 'eco_candidate',
+  status: 'probe_pending',
+  dataset: 'COCO 2017',
+  inputHint: {
+    width: 416,
+    height: 416,
+    layout: 'NCHW',
+    evidence: 'OpenCV Zoo nanodet.py uses image_shape=(416,416) and cv2.dnn.blobFromImage after float32 mean/std normalization.',
+  },
+  artifact: {
+    url: 'https://github.com/opencv/opencv_zoo/raw/main/models/object_detection_nanodet/object_detection_nanodet_2022nov.onnx',
+    sha256: '4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186',
+    declaredLicense: 'Apache-2.0',
+    redistributionVerified: false,
+    approximateSizeMb: 3.8,
+  },
+  sourceRepository: 'https://github.com/opencv/opencv_zoo/tree/main/models/object_detection_nanodet',
+  notes: [
+    'Official OpenCV Zoo model: Nanodet-m-plus-1.5x_416.',
+    'OpenCV Zoo reports COCO AP 0.304 and publishes class-level AP for mobility-relevant classes.',
+    'The official Git LFS pointer reports 3,800,954 bytes and SHA-256 4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186.',
+    'No Konta2r codec is assigned until a real ONNX probe records input/output names, types and shapes.',
+    'Do not bundle from Konta2r while redistributionVerified=false.',
+  ],
+  evidenceUrls: [
+    'https://github.com/opencv/opencv_zoo/tree/main/models/object_detection_nanodet',
+    'https://github.com/opencv/opencv_zoo/blob/main/models/object_detection_nanodet/README.md',
+    'https://github.com/opencv/opencv_zoo/blob/main/models/object_detection_nanodet/nanodet.py',
+    'https://github.com/opencv/opencv_zoo/blob/main/models/object_detection_nanodet/LICENSE',
+    'https://github.com/opencv/opencv_zoo/blob/main/models/object_detection_nanodet/object_detection_nanodet_2022nov.onnx',
+  ],
+};
+
 export const DETECTOR_CANDIDATES: readonly DetectorCandidateRecord[] = [
   KALRAY_SSD_MOBILENET_V2_COCO,
   OPENCV_SSD_MOBILENET_V2_COCO_2026JUL,
+  OPENCV_NANODET_M_PLUS_1_5X_416,
 ];
