@@ -28,6 +28,12 @@ export interface CommunitySpatialAggregate extends PublicSpatialAggregate {
 
 export type CommunityAggregateRecord = PublicFlowAggregate | CommunitySpatialAggregate;
 
+export function asCommunitySpatialAggregate(
+  aggregate: PublicSpatialAggregate,
+): CommunitySpatialAggregate {
+  return { ...aggregate, aggregateType: 'spatial' };
+}
+
 export interface CommunityNodeRuntimeSummary {
   uptimeRatio: number;
   inferenceFpsP50: number;
@@ -120,6 +126,28 @@ export function validateCommunityUpload(
     errors.push('aggregate_batch_too_large');
   }
 
+  if (envelope.runtime.uptimeRatio !== clamp01(envelope.runtime.uptimeRatio)) {
+    errors.push('invalid_uptime_ratio');
+  }
+  if (envelope.runtime.inferenceFpsP50 < 0 || !Number.isFinite(envelope.runtime.inferenceFpsP50)) {
+    errors.push('invalid_inference_fps');
+  }
+  if (
+    envelope.runtime.inferenceLatencyP95Ms < 0
+    || !Number.isFinite(envelope.runtime.inferenceLatencyP95Ms)
+  ) {
+    errors.push('invalid_inference_latency');
+  }
+  if (
+    envelope.runtime.droppedFrameRatio !== undefined
+    && envelope.runtime.droppedFrameRatio !== clamp01(envelope.runtime.droppedFrameRatio)
+  ) {
+    errors.push('invalid_dropped_frame_ratio');
+  }
+  if (envelope.quality.overall !== clamp01(envelope.quality.overall)) {
+    errors.push('invalid_node_quality');
+  }
+
   for (const [index, record] of envelope.records.entries()) {
     if (!(record.bucketEndMs > record.bucketStartMs)) {
       errors.push(`invalid_bucket:${index}`);
@@ -141,6 +169,9 @@ export function validateCommunityUpload(
       }
       if (!(record.cellSizeMeters >= 2)) {
         errors.push(`public_cell_too_fine:${index}`);
+      }
+      if (record.meanQuality !== clamp01(record.meanQuality)) {
+        errors.push(`invalid_mean_quality:${index}`);
       }
     }
   }
