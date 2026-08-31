@@ -111,6 +111,10 @@ function numericArraysEqual(left: readonly number[], right: readonly number[]): 
   });
 }
 
+function sortedClassNames(metrics: readonly DetectorClassMetrics[]): string[] {
+  return metrics.map((metric) => metric.className).sort();
+}
+
 function sameScaleThresholds(left: DetectorBenchmarkReport, right: DetectorBenchmarkReport): boolean {
   const a = left.benchmark.matching.imageScaleThresholds;
   const b = right.benchmark.matching.imageScaleThresholds;
@@ -129,6 +133,12 @@ function corpusFindings(left: DetectorBenchmarkReport, right: DetectorBenchmarkR
   }
   if (left.corpus.frameCount !== right.corpus.frameCount) {
     findings.push(error('frame_count_mismatch', 'Los reportes no evaluaron el mismo número de frames.'));
+  }
+  if (left.benchmark.evaluatedGroundTruthCount !== right.benchmark.evaluatedGroundTruthCount) {
+    findings.push(error('evaluated_ground_truth_mismatch', 'Los reportes no contienen el mismo número de objetos ground truth evaluables.'));
+  }
+  if (left.benchmark.ignoredGroundTruthCount !== right.benchmark.ignoredGroundTruthCount) {
+    findings.push(error('ignored_ground_truth_mismatch', 'Los reportes no contienen el mismo número de objetos ground truth ignorados.'));
   }
   if (!close(left.benchmark.matching.iouThreshold, right.benchmark.matching.iouThreshold)) {
     findings.push(error('matching_iou_mismatch', 'El IoU de matching no coincide.'));
@@ -189,20 +199,26 @@ function corpusFindings(left: DetectorBenchmarkReport, right: DetectorBenchmarkR
   return findings;
 }
 
-function operatingThresholdFindings(
+function operatingMetricFindings(
   left: DetectorBenchmarkReport,
   right: DetectorBenchmarkReport,
 ): ComparabilityFinding[] {
+  const findings: ComparabilityFinding[] = [];
   if (!left.confidence || !right.confidence) {
-    return [warning(
+    findings.push(warning(
       'operating_threshold_unproven',
       'Ambos reportes deben registrar operatingConfidenceThreshold para comparar métricas del punto operativo.',
-    )];
+    ));
+  } else if (!close(left.confidence.operatingConfidenceThreshold, right.confidence.operatingConfidenceThreshold)) {
+    findings.push(error('operating_threshold_mismatch', 'Los puntos operativos usan thresholds de confianza distintos.'));
   }
-  if (!close(left.confidence.operatingConfidenceThreshold, right.confidence.operatingConfidenceThreshold)) {
-    return [error('operating_threshold_mismatch', 'Los puntos operativos usan thresholds de confianza distintos.')];
+  if (!arraysEqual(
+    sortedClassNames(left.benchmark.classMetrics),
+    sortedClassNames(right.benchmark.classMetrics),
+  )) {
+    findings.push(error('operating_class_set_mismatch', 'El macro-F1 del punto operativo no está calculado sobre el mismo conjunto de clases.'));
   }
-  return [];
+  return findings;
 }
 
 function classMap(report: DetectorBenchmarkReport): Map<string, DetectorClassMetrics> {
@@ -247,6 +263,26 @@ function sweepFindings(left: DetectorBenchmarkReport, right: DetectorBenchmarkRe
   }
   if (!numericArraysEqual(a.thresholds, b.thresholds)) {
     findings.push(error('sweep_thresholds_mismatch', 'Los confidence sweeps no evaluaron exactamente los mismos thresholds.'));
+    return findings;
+  }
+  if (a.points.length !== b.points.length) {
+    findings.push(error('sweep_point_count_mismatch', 'Los confidence sweeps no contienen el mismo número de puntos evaluados.'));
+    return findings;
+  }
+  for (let index = 0; index < a.points.length; index += 1) {
+    const leftPoint = a.points[index];
+    const rightPoint = b.points[index];
+    if (!leftPoint || !rightPoint || !close(leftPoint.threshold, rightPoint.threshold)) {
+      findings.push(error('sweep_point_threshold_mismatch', `Los puntos del sweep difieren en la posición ${index}.`));
+      break;
+    }
+    if (!arraysEqual(
+      sortedClassNames(leftPoint.classMetrics),
+      sortedClassNames(rightPoint.classMetrics),
+    )) {
+      findings.push(error('sweep_class_set_mismatch', `El sweep no evalúa el mismo conjunto de clases en threshold ${leftPoint.threshold}.`));
+      break;
+    }
   }
   return findings;
 }
@@ -329,7 +365,7 @@ export function compareDetectorBenchmarkReports(
   const sharedCorpusFindings = corpusFindings(left, right);
   const corpusGate = gate(sharedCorpusFindings);
 
-  const operatingFindings = [...sharedCorpusFindings, ...operatingThresholdFindings(left, right)];
+  const operatingFindings = [...sharedCorpusFindings, ...operatingMetricFindings(left, right)];
   const operatingGate = gate(operatingFindings);
   const operatingThreshold = (
     left.confidence
@@ -343,7 +379,7 @@ export function compareDetectorBenchmarkReports(
 
   const performanceGate = gate([
     ...sharedCorpusFindings,
-    ...operatingThresholdFindings(left, right),
+    ...operatingMetricFindings(left, right),
     ...performanceFindings(left, right),
   ]);
   const leftLatency = left.benchmark.latency;
