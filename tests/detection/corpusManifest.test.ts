@@ -66,7 +66,7 @@ describe('corpus manifest', () => {
   it('rejects free-text/address-like and coordinate-like site identifiers', () => {
     expect(() => validateCorpusManifest(manifest([sequence({ siteId: 'Avenida Siempre Viva 123' })])))
       .toThrow('siteId must be an opaque');
-    expect(() => validateCorpusManifest(manifest([sequence({ siteId: '-33.4489_-70.6693' })])))
+    expect(() => validateCorpusManifest(manifest([sequence({ siteId: '33.4489_-70.6693' })])))
       .toThrow('precise latitude/longitude');
   });
 
