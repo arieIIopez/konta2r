@@ -131,9 +131,12 @@ describe('NanoDet Plus codec', () => {
   it('decodes GFL distance distributions, maps COCO classes, and removes letterbox padding', () => {
     const outputs = emptyOutputs();
     const location = (6 * 13) + 6;
-    outputs['836'].data[(location * 80) + 1] = 0.9;
+    const classHead = outputs['836'];
+    const bboxHead = outputs['839'];
+    if (!classHead || !bboxHead) throw new Error('synthetic NanoDet heads missing');
+    classHead.data[(location * 80) + 1] = 0.9;
     for (let side = 0; side < 4; side += 1) {
-      setDistributionPeak(outputs['839'].data, location, side, 1);
+      setDistributionPeak(bboxHead.data, location, side, 1);
     }
 
     const transform = calculateNanoDetLetterboxTransform(1_000, 500);

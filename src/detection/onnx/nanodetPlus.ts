@@ -508,8 +508,8 @@ export class NanoDetPlusCodec implements OnnxDetectorCodec<NanoDetFrameContext> 
 
       const featureWidth = Math.round(this.contract.inputWidth / level.stride);
       for (const location of indices) {
-        const confidence = maxScores[location];
-        const classId = classIds[location];
+        const confidence = maxScores[location] ?? Number.NaN;
+        const classId = classIds[location] ?? -1;
         if (!Number.isFinite(confidence) || confidence < this.scoreThreshold || classId < 0) continue;
 
         const row = Math.floor(location / featureWidth);
