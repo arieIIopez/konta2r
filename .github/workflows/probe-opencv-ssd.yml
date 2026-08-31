@@ -8,7 +8,6 @@ on:
       - scripts/probe-opencv-ssd.mjs
       - .github/workflows/probe-opencv-ssd.yml
       - package.json
-      - package-lock.json
   workflow_dispatch:
 
 permissions:
@@ -26,10 +25,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install pinned dependencies
-        run: npm ci
+        run: npm install
 
       - name: Probe registered OpenCV SSD checkpoint
         run: node scripts/probe-opencv-ssd.mjs
