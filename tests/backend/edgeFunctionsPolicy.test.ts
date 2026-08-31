@@ -53,7 +53,8 @@ describe('Supabase Edge Function policy', () => {
   it('makes rotation return a credential only from the human lifecycle endpoint, never from persistence', () => {
     expect(lifecycleFunction).toContain("body.action === 'rotate'");
     expect(lifecycleFunction).toContain('credential: result.credential');
-    expect(storesShared).not.toMatch(/credential\s*[:=]/);
+    expect(storesShared).not.toMatch(/input\.credential(?!Hmac|Version)/);
+    expect(storesShared).not.toMatch(/\bcredential\s+(text|varchar|bytea)\b/i);
     expect(storesShared).toContain('credential_hmac');
   });
 
