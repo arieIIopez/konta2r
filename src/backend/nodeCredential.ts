@@ -15,9 +15,9 @@ export interface NodeEnrollmentMaterial extends NodeCredentialRecordMaterial {
   credential: string;
 }
 
-export type SecureRandomFill = (bytes: Uint8Array) => void;
+export type SecureRandomFill = (bytes: Uint8Array<ArrayBuffer>) => void;
 
-function defaultRandomFill(bytes: Uint8Array): void {
+function defaultRandomFill(bytes: Uint8Array<ArrayBuffer>): void {
   crypto.getRandomValues(bytes);
 }
 
@@ -41,16 +41,23 @@ function bytesToHex(bytes: Uint8Array): string {
   return [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
-function pepperBytes(value: string | Uint8Array): Uint8Array {
-  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value);
+function ownArrayBufferView(value: Uint8Array): Uint8Array<ArrayBuffer> {
+  const copy = new Uint8Array(new ArrayBuffer(value.byteLength));
+  copy.set(value);
+  return copy;
+}
+
+function pepperBytes(value: string | Uint8Array): Uint8Array<ArrayBuffer> {
+  const source = typeof value === 'string' ? new TextEncoder().encode(value) : value;
+  const bytes = ownArrayBufferView(source);
   if (bytes.byteLength < MINIMUM_PEPPER_BYTES) {
     throw new Error(`Node credential pepper must contain at least ${MINIMUM_PEPPER_BYTES} bytes`);
   }
   return bytes;
 }
 
-function fillEntropy(length: number, randomFill: SecureRandomFill): Uint8Array {
-  const bytes = new Uint8Array(length);
+function fillEntropy(length: number, randomFill: SecureRandomFill): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(new ArrayBuffer(length));
   randomFill(bytes);
   return bytes;
 }
@@ -92,11 +99,8 @@ export async function computeNodeCredentialHmac(
     false,
     ['sign'],
   );
-  const signature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(credential),
-  );
+  const credentialBytes = ownArrayBufferView(new TextEncoder().encode(credential));
+  const signature = await crypto.subtle.sign('HMAC', key, credentialBytes);
   return bytesToHex(new Uint8Array(signature));
 }
 
