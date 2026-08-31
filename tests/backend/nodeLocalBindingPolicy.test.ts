@@ -25,7 +25,8 @@ describe('local node binding persistence policy', () => {
   });
 
   it('states explicitly that cached local status is not authorization authority', () => {
-    expect(bindingContract).toMatch(/Backend node state remains authoritative/i);
-    expect(bindingContract).toMatch(/never establishes server\s+authorization/is);
+    expect(bindingContract).toContain('Backend node state remains authoritative');
+    expect(bindingContract).toContain('it never establishes server');
+    expect(bindingContract).toContain('authorization and never contains the raw sensor credential');
   });
 });
