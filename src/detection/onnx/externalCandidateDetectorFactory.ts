@@ -56,6 +56,42 @@ function probeFromDiagnostic(
   };
 }
 
+/**
+ * A verified runtime smoke may resolve symbolic ONNX metadata into concrete
+ * tensor shapes. This view is used only for codec construction after the
+ * diagnostic verification gate passes; it never mutates or persists over the
+ * primary metadata stored in the diagnostic.
+ */
+function materializeVerifiedRuntimeContract(
+  diagnostic: OnnxCandidateProbeDiagnosticRecord,
+): OnnxModelProbeResult {
+  const probe = probeFromDiagnostic(diagnostic);
+  const smoke = diagnostic.probe.runtimeSmoke;
+  if (!smoke?.passed) return probe;
+  return {
+    ...probe,
+    inputs: probe.inputs.map((value) => value.name === smoke.input.name
+      ? {
+          ...value,
+          kind: 'tensor' as const,
+          type: smoke.input.type,
+          shape: [...smoke.input.shape],
+        }
+      : value),
+    outputs: probe.outputs.map((value) => {
+      const observed = smoke.outputs.find((output) => output.name === value.name);
+      return observed
+        ? {
+            ...value,
+            kind: 'tensor' as const,
+            type: observed.type,
+            shape: [...observed.shape],
+          }
+        : value;
+    }),
+  };
+}
+
 function uniqueClassNames(map: Readonly<Record<number, string>>): string[] {
   return [...new Set(Object.values(map))];
 }
@@ -121,8 +157,8 @@ export function buildExternalCandidateDetector(
     throw new Error(`No external detector factory is implemented for codec ${candidate.codecId ?? 'none'}`);
   }
 
-  const probe = probeFromDiagnostic(diagnostic);
-  const codec = SsdTfObjectDetectionCodec.fromProbe(probe, {
+  const codecProbe = materializeVerifiedRuntimeContract(diagnostic);
+  const codec = SsdTfObjectDetectionCodec.fromProbe(codecProbe, {
     ...(options.ssdRgbResize === undefined ? {} : { resizeRgb: options.ssdRgbResize }),
   });
   const model = buildExperimentalModelMetadata(
