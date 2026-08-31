@@ -69,6 +69,7 @@ export function verifyCandidateProbeDiagnostic(
 ): ProbeVerificationResult {
   const findings: ProbeVerificationFinding[] = [];
   const record = diagnostic.probe;
+  const metadataComplete = record.metadataCompleteness === 'complete';
   const identityMismatch = record.candidateId !== candidate.id
     || diagnostic.codecCompatibility.candidateId !== candidate.id;
 
@@ -96,7 +97,7 @@ export function verifyCandidateProbeDiagnostic(
     });
   }
 
-  if (record.metadataCompleteness !== 'complete') {
+  if (!metadataComplete) {
     findings.push({
       code: 'metadata_incomplete',
       severity: 'warning',
@@ -114,8 +115,10 @@ export function verifyCandidateProbeDiagnostic(
   } else if (recomputed.status === 'incompatible') {
     findings.push({
       code: 'codec_incompatible',
-      severity: 'error',
-      message: `Observed ONNX contract is incompatible with the registered codec: ${recomputed.errors.join(', ')}`,
+      severity: metadataComplete ? 'error' : 'warning',
+      message: metadataComplete
+        ? `Observed ONNX contract is incompatible with the registered codec: ${recomputed.errors.join(', ')}`
+        : 'Codec compatibility cannot be established because the primary tensor metadata is incomplete.',
     });
   }
 
