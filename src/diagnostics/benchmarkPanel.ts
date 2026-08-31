@@ -13,6 +13,10 @@ import {
   type ExternalBenchmarkSessionResult,
 } from '../detection/externalBenchmarkSession';
 import {
+  assertBenchmarkProfileMatchesManifestSplit,
+  verifyLocalBenchmarkManifest,
+} from '../detection/localBenchmarkManifest';
+import {
   hashLocalBenchmarkBlob,
   verifiedOnnxArtifactFromLocalBlob,
 } from '../detection/localBenchmarkFiles';
@@ -24,13 +28,14 @@ import {
 const DETECTOR_RETENTION_FLOOR = 0.05;
 const OPERATING_CONFIDENCE_THRESHOLD = 0.50;
 
-type BenchmarkProfile = 'development' | 'selection';
+type BenchmarkProfile = 'development' | 'selection' | 'final_evaluation';
 
 interface LocalInputs {
   diagnostic: File | null;
   model: File | null;
   annotations: File | null;
   video: File | null;
+  manifest: File | null;
 }
 
 function fileSizeMb(file: File | null): string {
@@ -76,13 +81,14 @@ export class BenchmarkPanel {
     model: null,
     annotations: null,
     video: null,
+    manifest: null,
   };
   private review: ImportedProbeDiagnosticReview | null = null;
   private sequence: AnnotatedBenchmarkSequence | null = null;
   private result: ExternalBenchmarkSessionResult | null = null;
   private profile: BenchmarkProfile = 'selection';
   private iouThreshold = 0.5;
-  private progress = 'Selecciona los cuatro archivos locales para preparar la corrida.';
+  private progress = 'Selecciona diagnóstico, modelo, anotaciones y video. Selection/final_evaluation exigen además un manifest congelado.';
   private error: string | null = null;
   private videoObjectUrl: string | null = null;
 
@@ -110,6 +116,7 @@ export class BenchmarkPanel {
     const ready = this.isReadyToRun();
     const timedFrames = sequence?.frames.filter((frame) => frame.mediaTimeMs !== undefined).length ?? 0;
     const allFramesTimed = sequence ? timedFrames === sequence.frames.length : false;
+    const strictProfile = this.profile !== 'development';
 
     mount.innerHTML = `
       <section class="node-runtime-shell benchmark-shell">
@@ -117,7 +124,7 @@ export class BenchmarkPanel {
           <div>
             <div class="eyebrow">Benchmark local</div>
             <h2>Ensayo reproducible de detector</h2>
-            <p>Ejecuta un checkpoint externo contra video y ground truth locales. Konta2r verifica identidad, sincronización y validez metodológica antes de presentar la corrida como evidencia.</p>
+            <p>Ejecuta un checkpoint externo contra video y ground truth locales. Konta2r verifica identidad, manifest congelado, split experimental, sincronización y validez metodológica antes de presentar la corrida como evidencia.</p>
           </div>
           <a class="probe-back" href="./">Volver al nodo</a>
         </header>
@@ -136,13 +143,19 @@ export class BenchmarkPanel {
             ${this.inputCard('video', '4 · Video local', this.inputs.video, this.inputs.video
               ? `${this.inputs.video.name} · ${fileSizeMb(this.inputs.video)}`
               : 'Video asociado a las anotaciones', 'video/*')}
+            ${this.inputCard('manifest', '5 · Corpus manifest', this.inputs.manifest, this.inputs.manifest
+              ? `${this.inputs.manifest.name} · se verificará por SHA-256 antes de inferir`
+              : strictProfile
+                ? `Obligatorio para ${this.profile}`
+                : 'Opcional en development; recomendado para trazabilidad', '.json,application/json')}
           </div>
 
           <div class="benchmark-controls">
             <label>
               <span>Perfil de validez</span>
               <select data-benchmark-profile ${this.running ? 'disabled' : ''}>
-                <option value="selection" ${this.profile === 'selection' ? 'selected' : ''}>selection · evidencia estricta</option>
+                <option value="selection" ${this.profile === 'selection' ? 'selected' : ''}>selection · solo validation</option>
+                <option value="final_evaluation" ${this.profile === 'final_evaluation' ? 'selected' : ''}>final_evaluation · solo held_out_test</option>
                 <option value="development" ${this.profile === 'development' ? 'selected' : ''}>development · evidencia provisional</option>
               </select>
             </label>
@@ -157,12 +170,12 @@ export class BenchmarkPanel {
             </div>
           </div>
 
-          <p class="runtime-note">Todo se procesa localmente. El video, el checkpoint y las anotaciones no se suben a Community ni al backend. En <code>selection</code> se exige evidencia del frame presentado y seek ≤50 ms. La métrica principal usa confidence ${OPERATING_CONFIDENCE_THRESHOLD.toFixed(2)}; el mismo pase de inferencia genera además un barrido de confidence para precision/recall. ${sequence && !allFramesTimed ? '<strong>El corpus contiene frames sin mediaTimeMs y no puede ejecutarse contra video.</strong>' : ''}</p>
+          <p class="runtime-note">Todo se procesa localmente. El video, checkpoint, anotaciones y manifest no se suben a Community ni al backend. <code>selection</code> acepta únicamente una secuencia del split <strong>validation</strong>; <code>final_evaluation</code> acepta únicamente <strong>held_out_test</strong>. Ambos exigen evidencia del frame presentado y seek ≤50 ms. El manifest se hashea y se contrasta con los hashes reales de anotaciones/video <strong>antes de cargar el modelo</strong>. ${sequence && !allFramesTimed ? '<strong>El corpus contiene frames sin mediaTimeMs y no puede ejecutarse contra video.</strong>' : ''}</p>
 
           ${review ? this.verificationBlock(review) : ''}
 
           <div class="node-runtime-controls benchmark-actions">
-            <button class="action primary" type="button" data-benchmark-run ${ready && !this.running ? '' : 'disabled'}>${this.running ? 'Ejecutando…' : 'Verificar archivos y ejecutar benchmark'}</button>
+            <button class="action primary" type="button" data-benchmark-run ${ready && !this.running ? '' : 'disabled'}>${this.running ? 'Ejecutando…' : 'Preflight de corpus y ejecutar benchmark'}</button>
             ${result ? '<button class="action secondary" type="button" data-benchmark-json>Guardar JSON</button><button class="action secondary" type="button" data-benchmark-summary>Guardar resumen CSV</button><button class="action secondary" type="button" data-benchmark-strata>Guardar estratos CSV</button><button class="action secondary" type="button" data-benchmark-confidence>Guardar confidence sweep CSV</button>' : ''}
           </div>
 
@@ -174,7 +187,7 @@ export class BenchmarkPanel {
       </section>
     `;
 
-    for (const key of ['diagnostic', 'model', 'annotations', 'video'] as const) {
+    for (const key of ['diagnostic', 'model', 'annotations', 'video', 'manifest'] as const) {
       mount.querySelector<HTMLInputElement>(`[data-benchmark-file="${key}"]`)?.addEventListener('change', (event) => {
         const input = event.currentTarget as HTMLInputElement;
         const file = input.files?.[0] ?? null;
@@ -184,7 +197,11 @@ export class BenchmarkPanel {
 
     mount.querySelector<HTMLSelectElement>('[data-benchmark-profile]')?.addEventListener('change', (event) => {
       const value = (event.currentTarget as HTMLSelectElement).value;
-      this.profile = value === 'development' ? 'development' : 'selection';
+      this.profile = value === 'development'
+        ? 'development'
+        : value === 'final_evaluation'
+          ? 'final_evaluation'
+          : 'selection';
       this.result = null;
       this.render();
     });
@@ -194,9 +211,7 @@ export class BenchmarkPanel {
       this.result = null;
       this.render();
     });
-    mount.querySelector<HTMLButtonElement>('[data-benchmark-run]')?.addEventListener('click', () => {
-      void this.run();
-    });
+    mount.querySelector<HTMLButtonElement>('[data-benchmark-run]')?.addEventListener('click', () => void this.run());
     mount.querySelector<HTMLButtonElement>('[data-benchmark-json]')?.addEventListener('click', () => this.downloadJson());
     mount.querySelector<HTMLButtonElement>('[data-benchmark-summary]')?.addEventListener('click', () => this.downloadSummary());
     mount.querySelector<HTMLButtonElement>('[data-benchmark-strata]')?.addEventListener('click', () => this.downloadStrata());
@@ -239,10 +254,13 @@ export class BenchmarkPanel {
     const validity = result.validity;
     const seek = benchmark.mediaSeek;
     const observedBest = confidence?.sweep.bestObservedMacroF1;
+    const manifest = result.report.corpus.manifest;
     return `
       <section class="benchmark-result validity-${validity.status}">
         <div class="benchmark-result-head">
           <div><span>Validez científica</span><strong>${validity.status}</strong></div>
+          <div><span>Perfil</span><strong>${validity.profile}</strong></div>
+          <div><span>Split</span><strong>${manifest?.split ?? 'sin manifest'}</strong></div>
           <div><span>Modelo</span><strong>${this.escapeHtml(benchmark.detector.model.modelId)}</strong></div>
           <div><span>Backend</span><strong>${benchmark.detector.runtime.backend}</strong></div>
           <div><span>Frames</span><strong>${benchmark.frameCount}</strong></div>
@@ -255,6 +273,7 @@ export class BenchmarkPanel {
           <div><span>FPS efectivo</span><strong>${finiteText(benchmark.latency.effectiveInferenceFps, 2)}</strong></div>
           <div><span>Seek máx.</span><strong>${finiteText(seek?.absoluteErrorMaxMs, 1)} ms</strong></div>
           <div><span>Hash modelo</span><strong class="mono">${benchmark.detector.model.modelSha256?.slice(0, 12) ?? '—'}…</strong></div>
+          <div><span>Hash manifest</span><strong class="mono">${manifest?.sha256.slice(0, 12) ?? '—'}…</strong></div>
         </div>
         ${confidence ? '<div class="benchmark-findings"><p><b>Análisis exploratorio de confidence.</b> “Mejor observado” describe este corpus y no constituye un umbral recomendado ni una estimación mAP.</p></div>' : ''}
         ${validity.findings.length > 0 ? `<div class="benchmark-findings">${validity.findings.map((finding) => `<p><b>${finding.severity}</b> · ${this.escapeHtml(finding.code)} — ${this.escapeHtml(finding.message)}</p>`).join('')}</div>` : '<div class="benchmark-findings"><p>Sin hallazgos del gate de validez para este perfil.</p></div>'}
@@ -291,9 +310,11 @@ export class BenchmarkPanel {
   }
 
   private isReadyToRun(): boolean {
-    const { diagnostic, model, annotations, video } = this.inputs;
+    const { diagnostic, model, annotations, video, manifest } = this.inputs;
+    const requiresManifest = this.profile !== 'development';
     return Boolean(
       diagnostic && model && annotations && video
+      && (!requiresManifest || manifest)
       && this.review?.verification.status === 'verified'
       && this.sequence
       && this.sequence.frames.length > 0
@@ -308,22 +329,16 @@ export class BenchmarkPanel {
     const modelFile = this.inputs.model;
     const annotationFile = this.inputs.annotations;
     const videoFile = this.inputs.video;
+    const manifestFile = this.inputs.manifest;
     if (!review || !sequence || !modelFile || !annotationFile || !videoFile) return;
 
     this.running = true;
     this.result = null;
     this.error = null;
-    this.progress = 'Verificando checkpoint local…';
+    this.progress = 'Preflight: calculando identidad del corpus…';
     this.render();
 
     try {
-      const artifact = await verifiedOnnxArtifactFromLocalBlob(
-        modelFile,
-        review.candidate.artifact.sha256,
-        { onProgress: (value) => this.setProgress(`Hash ONNX ${(value.ratio * 100).toFixed(0)}%`) },
-      );
-      if (this.destroyed) return;
-
       this.setProgress('Calculando SHA-256 de las anotaciones…');
       const annotationSha256 = await hashLocalBenchmarkBlob(annotationFile, {
         onProgress: (value) => this.setProgress(`Hash anotaciones ${(value.ratio * 100).toFixed(0)}%`),
@@ -336,6 +351,29 @@ export class BenchmarkPanel {
       });
       if (this.destroyed) return;
 
+      let manifestIdentity;
+      if (manifestFile) {
+        this.setProgress('Verificando manifest congelado y split experimental…');
+        const manifestVerification = await verifyLocalBenchmarkManifest(
+          manifestFile,
+          sequence,
+          annotationSha256,
+          mediaSha256,
+          { onProgress: (value) => this.setProgress(`Hash manifest ${(value.ratio * 100).toFixed(0)}%`) },
+        );
+        manifestIdentity = manifestVerification.identity;
+      }
+      assertBenchmarkProfileMatchesManifestSplit(this.profile, manifestIdentity);
+      if (this.destroyed) return;
+
+      this.setProgress('Corpus verificado. Verificando checkpoint local…');
+      const artifact = await verifiedOnnxArtifactFromLocalBlob(
+        modelFile,
+        review.candidate.artifact.sha256,
+        { onProgress: (value) => this.setProgress(`Hash ONNX ${(value.ratio * 100).toFixed(0)}%`) },
+      );
+      if (this.destroyed) return;
+
       this.revokeVideoUrl();
       const video = this.mountElement?.querySelector<HTMLVideoElement>('[data-benchmark-video]');
       if (!video) throw new Error('Benchmark video element is unavailable');
@@ -343,7 +381,7 @@ export class BenchmarkPanel {
       video.src = this.videoObjectUrl;
       video.load();
 
-      const strict = this.profile === 'selection';
+      const strict = this.profile !== 'development';
       const provider = new BrowserVideoBenchmarkFrameProvider(video, {
         seekToleranceMs: strict ? 50 : 100,
         requireDimensionMatch: true,
@@ -366,6 +404,7 @@ export class BenchmarkPanel {
             webgpuAvailable: 'gpu' in navigator,
           },
           corpusHashes: { annotationSha256, mediaSha256 },
+          ...(manifestIdentity === undefined ? {} : { manifestIdentity }),
           detector: {
             minConfidence: DETECTOR_RETENTION_FLOOR,
             preferWebGpu: true,
@@ -389,7 +428,7 @@ export class BenchmarkPanel {
       );
       if (this.destroyed) return;
       this.result = result;
-      this.progress = `Benchmark completo · ${result.validity.status} · ${result.report.benchmark.frameCount} frames.`;
+      this.progress = `Benchmark completo · ${result.validity.status} · ${result.report.benchmark.frameCount} frames · ${result.report.corpus.manifest?.split ?? 'sin manifest'}.`;
     } catch (error) {
       if (this.destroyed) return;
       this.error = error instanceof Error ? error.message : 'benchmark_run_failed';
