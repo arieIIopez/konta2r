@@ -12,6 +12,7 @@ import {
 
 export interface MaterializedBenchmarkFrame {
   source: CanvasImageSource;
+  actualMediaTimeMs?: number;
   release?: () => Promise<void> | void;
 }
 
@@ -60,7 +61,11 @@ export async function runStreamingAnnotatedBenchmark(
           sourceHeight: frame.height,
           timestampMs: frame.timestampMs,
         });
-        accumulator.addFrame(frame, output);
+        accumulator.addFrame(frame, output, {
+          ...(materialized.actualMediaTimeMs === undefined
+            ? {}
+            : { actualMediaTimeMs: materialized.actualMediaTimeMs }),
+        });
       } finally {
         await materialized.release?.();
       }
