@@ -22,6 +22,14 @@ async function bootstrap(): Promise<void> {
     window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
     return;
   }
+  if (diagnostics === 'annotate') {
+    await import('./diagnostics/annotation.css');
+    const { AnnotationPanel } = await import('./diagnostics/annotationPanel');
+    const panel = new AnnotationPanel();
+    panel.mount(mount);
+    window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
+    return;
+  }
 
   await import('./main');
   const { NodePanel } = await import('./node/nodePanel');
