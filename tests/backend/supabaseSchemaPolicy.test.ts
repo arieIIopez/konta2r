@@ -19,6 +19,14 @@ describe('Supabase schema privacy policy', () => {
     expect(schemaSql).not.toContain('grant insert, update, delete on table public.segments to anon');
   });
 
+  it('makes the node registry read-only to browser roles so enrollment/lifecycle cannot bypass server checks', () => {
+    expect(schemaSql).toContain('grant select on table public.nodes to authenticated');
+    expect(schemaSql).not.toContain('grant select, insert, update on table public.nodes to authenticated');
+    expect(schemaSql).not.toContain('nodes_insert_own');
+    expect(schemaSql).not.toContain('nodes_update_own');
+    expect(schemaSql).toContain("(status = 'revoked') = (revoked_at is not null)");
+  });
+
   it('stores only a HMAC fingerprint for node credentials', () => {
     expect(schemaSql).toContain('credential_hmac text not null');
     expect(schemaSql).not.toMatch(/raw_(credential|token)|credential_secret|node_secret/i);
