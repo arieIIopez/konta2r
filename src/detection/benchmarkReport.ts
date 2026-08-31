@@ -1,4 +1,6 @@
 import type { AnnotatedDetectorBenchmarkResult, RecallStratum } from './annotatedBenchmark';
+import type { BenchmarkManifestIdentity } from './benchmarkManifestLink';
+import { CORPUS_SPLITS } from './corpusManifest';
 import type {
   ConfidenceSweepPoint,
   ConfidenceSweepResult,
@@ -11,6 +13,8 @@ export interface BenchmarkCorpusIdentity {
   frameCount: number;
   annotationSha256?: string;
   mediaSha256?: string;
+  /** Verified link to a separately hashed, frozen multi-sequence manifest. */
+  manifest?: BenchmarkManifestIdentity;
 }
 
 export interface BenchmarkDeviceIdentity {
@@ -84,6 +88,13 @@ function assertSha256IfPresent(value: string | undefined, label: string): void {
   if (!/^[a-f0-9]{64}$/i.test(value)) throw new Error(`${label} must be a SHA-256 hex digest`);
 }
 
+function assertManifestIdentity(value: BenchmarkManifestIdentity | undefined): void {
+  if (value === undefined) return;
+  if (value.corpusId.trim().length === 0) throw new Error('manifest corpusId is required');
+  assertSha256IfPresent(value.sha256, 'manifestSha256');
+  if (!CORPUS_SPLITS.includes(value.split)) throw new Error(`Unsupported manifest corpus split ${value.split}`);
+}
+
 function assertConfidenceAnalysis(
   confidence: BenchmarkConfidenceAnalysis | undefined,
   benchmark: AnnotatedDetectorBenchmarkResult,
@@ -111,6 +122,7 @@ export function createDetectorBenchmarkReport(input: BenchmarkReportInput): Dete
   if (input.device.label.trim().length === 0) throw new Error('device label is required');
   assertSha256IfPresent(input.corpus.annotationSha256, 'annotationSha256');
   assertSha256IfPresent(input.corpus.mediaSha256, 'mediaSha256');
+  assertManifestIdentity(input.corpus.manifest);
   assertConfidenceAnalysis(input.confidence, input.benchmark);
 
   const createdAtIso = input.createdAtIso ?? new Date().toISOString();
@@ -126,6 +138,15 @@ export function createDetectorBenchmarkReport(input: BenchmarkReportInput): Dete
       frameCount: input.corpus.frameCount,
       ...(input.corpus.annotationSha256 === undefined ? {} : { annotationSha256: input.corpus.annotationSha256.toLowerCase() }),
       ...(input.corpus.mediaSha256 === undefined ? {} : { mediaSha256: input.corpus.mediaSha256.toLowerCase() }),
+      ...(input.corpus.manifest === undefined
+        ? {}
+        : {
+            manifest: {
+              corpusId: input.corpus.manifest.corpusId,
+              sha256: input.corpus.manifest.sha256.toLowerCase(),
+              split: input.corpus.manifest.split,
+            },
+          }),
     },
     device: { ...input.device },
     benchmark: {
@@ -175,7 +196,8 @@ function csvRow(values: readonly (string | number | boolean | undefined)[]): str
 
 export function detectorBenchmarkSummaryCsv(report: DetectorBenchmarkReport): string {
   const header = [
-    'runId', 'createdAtIso', 'datasetId', 'device', 'modelId', 'modelVersion', 'modelSha256',
+    'runId', 'createdAtIso', 'datasetId', 'manifestCorpusId', 'manifestSha256', 'corpusSplit',
+    'device', 'modelId', 'modelVersion', 'modelSha256',
     'backend', 'runtime', 'runtimeVersion', 'iouThreshold', 'operatingConfidenceThreshold',
     'bestObservedMacroF1Threshold', 'bestObservedMacroF1', 'frameCount', 'className',
     'tp', 'fp', 'fn', 'precision', 'recall', 'f1', 'macroF1', 'matchedIoUMean',
@@ -186,6 +208,9 @@ export function detectorBenchmarkSummaryCsv(report: DetectorBenchmarkReport): st
     report.runId,
     report.createdAtIso,
     report.corpus.datasetId,
+    report.corpus.manifest?.corpusId,
+    report.corpus.manifest?.sha256,
+    report.corpus.manifest?.split,
     report.device.label,
     report.benchmark.detector.model.modelId,
     report.benchmark.detector.model.modelVersion,
@@ -228,6 +253,9 @@ function stratumRows(
   return strata.map((stratum) => csvRow([
     report.runId,
     report.corpus.datasetId,
+    report.corpus.manifest?.corpusId,
+    report.corpus.manifest?.sha256,
+    report.corpus.manifest?.split,
     report.device.label,
     report.benchmark.detector.model.modelId,
     dimension,
@@ -242,7 +270,8 @@ function stratumRows(
 
 export function detectorBenchmarkStrataCsv(report: DetectorBenchmarkReport): string {
   const header = [
-    'runId', 'datasetId', 'device', 'modelId', 'dimension', 'className', 'stratum',
+    'runId', 'datasetId', 'manifestCorpusId', 'manifestSha256', 'corpusSplit',
+    'device', 'modelId', 'dimension', 'className', 'stratum',
     'groundTruthCount', 'tp', 'fn', 'recall',
   ];
   return `${[
@@ -255,7 +284,8 @@ export function detectorBenchmarkStrataCsv(report: DetectorBenchmarkReport): str
 export function detectorBenchmarkConfidenceSweepCsv(report: DetectorBenchmarkReport): string {
   const confidence = report.confidence;
   const header = [
-    'runId', 'datasetId', 'device', 'modelId', 'iouThreshold', 'threshold', 'className',
+    'runId', 'datasetId', 'manifestCorpusId', 'manifestSha256', 'corpusSplit',
+    'device', 'modelId', 'iouThreshold', 'threshold', 'className',
     'tp', 'fp', 'fn', 'precision', 'recall', 'f1', 'macroF1', 'operatingPoint',
   ];
   if (!confidence) return `${csvRow(header)}\n`;
@@ -265,6 +295,9 @@ export function detectorBenchmarkConfidenceSweepCsv(report: DetectorBenchmarkRep
       rows.push(csvRow([
         report.runId,
         report.corpus.datasetId,
+        report.corpus.manifest?.corpusId,
+        report.corpus.manifest?.sha256,
+        report.corpus.manifest?.split,
         report.device.label,
         report.benchmark.detector.model.modelId,
         confidence.sweep.iouThreshold,
