@@ -4,6 +4,7 @@ import {
   type AnnotatedBenchmarkSequence,
 } from '../detection/benchmarkDatasetParser';
 import {
+  detectorBenchmarkConfidenceSweepCsv,
   detectorBenchmarkStrataCsv,
   detectorBenchmarkSummaryCsv,
 } from '../detection/benchmarkReport';
@@ -20,7 +21,8 @@ import {
   type ImportedProbeDiagnosticReview,
 } from '../detection/onnx/probeDiagnosticReview';
 
-const DETECTOR_MIN_CONFIDENCE = 0.5;
+const DETECTOR_RETENTION_FLOOR = 0.05;
+const OPERATING_CONFIDENCE_THRESHOLD = 0.50;
 
 type BenchmarkProfile = 'development' | 'selection';
 
@@ -149,19 +151,19 @@ export class BenchmarkPanel {
               <input data-benchmark-iou type="number" min="0.1" max="0.95" step="0.05" value="${this.iouThreshold}" ${this.running ? 'disabled' : ''}>
             </label>
             <div class="benchmark-fixed">
-              <span>Confidence detector</span>
-              <strong>${DETECTOR_MIN_CONFIDENCE.toFixed(2)}</strong>
-              <small>Fijo y registrado en esta primera versión.</small>
+              <span>Confidence operativo</span>
+              <strong>${OPERATING_CONFIDENCE_THRESHOLD.toFixed(2)}</strong>
+              <small>El adapter retiene desde ${DETECTOR_RETENTION_FLOOR.toFixed(2)} para el sweep 0,05–0,95.</small>
             </div>
           </div>
 
-          <p class="runtime-note">Todo se procesa localmente. El video, el checkpoint y las anotaciones no se suben a Community ni al backend. En <code>selection</code> se exige evidencia del frame presentado y seek ≤50 ms. ${sequence && !allFramesTimed ? '<strong>El corpus contiene frames sin mediaTimeMs y no puede ejecutarse contra video.</strong>' : ''}</p>
+          <p class="runtime-note">Todo se procesa localmente. El video, el checkpoint y las anotaciones no se suben a Community ni al backend. En <code>selection</code> se exige evidencia del frame presentado y seek ≤50 ms. La métrica principal usa confidence ${OPERATING_CONFIDENCE_THRESHOLD.toFixed(2)}; el mismo pase de inferencia genera además un barrido de confidence para precision/recall. ${sequence && !allFramesTimed ? '<strong>El corpus contiene frames sin mediaTimeMs y no puede ejecutarse contra video.</strong>' : ''}</p>
 
           ${review ? this.verificationBlock(review) : ''}
 
           <div class="node-runtime-controls benchmark-actions">
             <button class="action primary" type="button" data-benchmark-run ${ready && !this.running ? '' : 'disabled'}>${this.running ? 'Ejecutando…' : 'Verificar archivos y ejecutar benchmark'}</button>
-            ${result ? '<button class="action secondary" type="button" data-benchmark-json>Guardar JSON</button><button class="action secondary" type="button" data-benchmark-summary>Guardar resumen CSV</button><button class="action secondary" type="button" data-benchmark-strata>Guardar estratos CSV</button>' : ''}
+            ${result ? '<button class="action secondary" type="button" data-benchmark-json>Guardar JSON</button><button class="action secondary" type="button" data-benchmark-summary>Guardar resumen CSV</button><button class="action secondary" type="button" data-benchmark-strata>Guardar estratos CSV</button><button class="action secondary" type="button" data-benchmark-confidence>Guardar confidence sweep CSV</button>' : ''}
           </div>
 
           <div class="benchmark-progress">${this.escapeHtml(this.progress)}</div>
@@ -198,6 +200,7 @@ export class BenchmarkPanel {
     mount.querySelector<HTMLButtonElement>('[data-benchmark-json]')?.addEventListener('click', () => this.downloadJson());
     mount.querySelector<HTMLButtonElement>('[data-benchmark-summary]')?.addEventListener('click', () => this.downloadSummary());
     mount.querySelector<HTMLButtonElement>('[data-benchmark-strata]')?.addEventListener('click', () => this.downloadStrata());
+    mount.querySelector<HTMLButtonElement>('[data-benchmark-confidence]')?.addEventListener('click', () => this.downloadConfidenceSweep());
   }
 
   private inputCard(
@@ -232,8 +235,10 @@ export class BenchmarkPanel {
 
   private resultBlock(result: ExternalBenchmarkSessionResult): string {
     const benchmark = result.report.benchmark;
+    const confidence = result.report.confidence;
     const validity = result.validity;
     const seek = benchmark.mediaSeek;
+    const observedBest = confidence?.sweep.bestObservedMacroF1;
     return `
       <section class="benchmark-result validity-${validity.status}">
         <div class="benchmark-result-head">
@@ -243,13 +248,15 @@ export class BenchmarkPanel {
           <div><span>Frames</span><strong>${benchmark.frameCount}</strong></div>
         </div>
         <div class="benchmark-metrics">
-          <div><span>Macro F1</span><strong>${finiteText(benchmark.macroF1)}</strong></div>
+          <div><span>Macro F1 @ ${finiteText(confidence?.operatingConfidenceThreshold, 2)}</span><strong>${finiteText(benchmark.macroF1)}</strong></div>
+          <div><span>Mejor macro F1 observado</span><strong>${finiteText(observedBest?.macroF1)} @ ${finiteText(observedBest?.threshold, 2)}</strong></div>
           <div><span>IoU medio TP</span><strong>${finiteText(benchmark.matchedIoUMean)}</strong></div>
           <div><span>Inferencia p95</span><strong>${finiteText(benchmark.latency.inferenceMsP95, 1)} ms</strong></div>
           <div><span>FPS efectivo</span><strong>${finiteText(benchmark.latency.effectiveInferenceFps, 2)}</strong></div>
           <div><span>Seek máx.</span><strong>${finiteText(seek?.absoluteErrorMaxMs, 1)} ms</strong></div>
           <div><span>Hash modelo</span><strong class="mono">${benchmark.detector.model.modelSha256?.slice(0, 12) ?? '—'}…</strong></div>
         </div>
+        ${confidence ? '<div class="benchmark-findings"><p><b>Análisis exploratorio de confidence.</b> “Mejor observado” describe este corpus y no constituye un umbral recomendado ni una estimación mAP.</p></div>' : ''}
         ${validity.findings.length > 0 ? `<div class="benchmark-findings">${validity.findings.map((finding) => `<p><b>${finding.severity}</b> · ${this.escapeHtml(finding.code)} — ${this.escapeHtml(finding.message)}</p>`).join('')}</div>` : '<div class="benchmark-findings"><p>Sin hallazgos del gate de validez para este perfil.</p></div>'}
         <div class="benchmark-class-table">
           <table>
@@ -360,17 +367,22 @@ export class BenchmarkPanel {
           },
           corpusHashes: { annotationSha256, mediaSha256 },
           detector: {
-            minConfidence: DETECTOR_MIN_CONFIDENCE,
+            minConfidence: DETECTOR_RETENTION_FLOOR,
             preferWebGpu: true,
           },
           benchmark: {
             iouThreshold: this.iouThreshold,
+            confidence: {
+              operatingConfidenceThreshold: OPERATING_CONFIDENCE_THRESHOLD,
+            },
             onProgress: (value) => this.setProgress(`Inferencia ${value.completedFrames}/${value.totalFrames} · ${value.frameId}`),
           },
           validity: { profile: this.profile },
           notes: [
             'benchmark_surface:?diagnostics=benchmark',
-            `detector_min_confidence:${DETECTOR_MIN_CONFIDENCE}`,
+            `detector_retention_floor:${DETECTOR_RETENTION_FLOOR}`,
+            `operating_confidence_threshold:${OPERATING_CONFIDENCE_THRESHOLD}`,
+            'confidence_sweep:0.05_to_0.95_step_0.05',
             `validity_profile:${this.profile}`,
           ],
         },
@@ -414,6 +426,13 @@ export class BenchmarkPanel {
     if (!result) return;
     const stem = safeFilePart(result.report.runId);
     downloadText(`${stem}-strata.csv`, detectorBenchmarkStrataCsv(result.report), 'text/csv;charset=utf-8');
+  }
+
+  private downloadConfidenceSweep(): void {
+    const result = this.result;
+    if (!result) return;
+    const stem = safeFilePart(result.report.runId);
+    downloadText(`${stem}-confidence-sweep.csv`, detectorBenchmarkConfidenceSweepCsv(result.report), 'text/csv;charset=utf-8');
   }
 
   private revokeVideoUrl(): void {
