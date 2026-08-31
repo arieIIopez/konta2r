@@ -1,5 +1,5 @@
 import {
-  createNodeEnrollmentMaterial,
+  createNodeCredentialMaterial,
   isValidNodeId,
   type SecureRandomFill,
 } from './nodeCredential.ts';
@@ -102,7 +102,7 @@ export async function applyNodeLifecycleAction(
     const options: { keyVersion?: number; randomFill?: SecureRandomFill } = {};
     if (dependencies.keyVersion !== undefined) options.keyVersion = dependencies.keyVersion;
     if (dependencies.randomFill !== undefined) options.randomFill = dependencies.randomFill;
-    const material = await createNodeEnrollmentMaterial(dependencies.pepper, options);
+    const material = await createNodeCredentialMaterial(dependencies.pepper, options);
 
     const applied = await dependencies.store.rotateCredential({
       nodeId,
