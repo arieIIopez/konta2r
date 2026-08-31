@@ -59,6 +59,11 @@ export function parsePilotCaptureRecordJson(text: string): PilotCaptureRecord {
   const scene = object(root.scene, 'scene');
   const camera = object(root.camera, 'camera');
   const device = object(root.device, 'device');
+  const media = root.media === undefined ? undefined : object(root.media, 'media');
+  const facingMode = optionalString(camera.facingMode, 'camera.facingMode');
+  const deviceMemoryGiB = optionalNumber(device.deviceMemoryGiB, 'device.deviceMemoryGiB');
+  const userAgent = optionalString(device.userAgent, 'device.userAgent');
+  const notes = stringArray(root.notes, 'notes');
 
   const record: PilotCaptureRecord = {
     schemaVersion: string(root.schemaVersion, 'schemaVersion') as '1',
@@ -83,23 +88,24 @@ export function parsePilotCaptureRecordJson(text: string): PilotCaptureRecord {
       frameRate: number(camera.frameRate, 'camera.frameRate'),
       orientation: string(camera.orientation, 'camera.orientation') as CaptureOrientation,
       mount: string(camera.mount, 'camera.mount') as CaptureMount,
-      ...(optionalString(camera.facingMode, 'camera.facingMode') === undefined
-        ? {}
-        : { facingMode: optionalString(camera.facingMode, 'camera.facingMode') as string }),
+      ...(facingMode === undefined ? {} : { facingMode }),
     },
     device: {
       profile: string(device.profile, 'device.profile') as NodePerformanceProfile,
       hardwareConcurrency: number(device.hardwareConcurrency, 'device.hardwareConcurrency'),
       webgpu: boolean(device.webgpu, 'device.webgpu'),
       powerSource: string(device.powerSource, 'device.powerSource') as CapturePowerSource,
-      ...(optionalNumber(device.deviceMemoryGiB, 'device.deviceMemoryGiB') === undefined
-        ? {}
-        : { deviceMemoryGiB: optionalNumber(device.deviceMemoryGiB, 'device.deviceMemoryGiB') as number }),
-      ...(optionalString(device.userAgent, 'device.userAgent') === undefined
-        ? {}
-        : { userAgent: optionalString(device.userAgent, 'device.userAgent') as string }),
+      ...(deviceMemoryGiB === undefined ? {} : { deviceMemoryGiB }),
+      ...(userAgent === undefined ? {} : { userAgent }),
     },
-    ...(stringArray(root.notes, 'notes') === undefined ? {} : { notes: stringArray(root.notes, 'notes') as string[] }),
+    ...(media === undefined ? {} : {
+      media: {
+        sha256: string(media.sha256, 'media.sha256'),
+        sizeBytes: number(media.sizeBytes, 'media.sizeBytes'),
+        mimeType: string(media.mimeType, 'media.mimeType'),
+      },
+    }),
+    ...(notes === undefined ? {} : { notes }),
   };
 
   validatePilotCaptureRecord(record);
