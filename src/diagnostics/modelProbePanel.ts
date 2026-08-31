@@ -11,7 +11,12 @@ import {
   serializeOnnxCandidateProbeDiagnosticRecord,
   type OnnxCandidateProbeDiagnosticRecord,
 } from '../detection/onnx/probeDiagnostic';
+import { reviewImportedProbeDiagnostic } from '../detection/onnx/probeDiagnosticReview';
 import { buildOnnxProbeRecord } from '../detection/onnx/probeRecord';
+import {
+  verifyCandidateProbeDiagnostic,
+  type ProbeVerificationResult,
+} from '../detection/onnx/probeVerification';
 
 function formatMb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -30,6 +35,7 @@ export class ModelProbePanel {
   private running = false;
   private destroyed = false;
   private lastDiagnostic: OnnxCandidateProbeDiagnosticRecord | null = null;
+  private lastVerification: ProbeVerificationResult | null = null;
   private candidate: DetectorCandidateRecord = KALRAY_SSD_MOBILENET_V2_COCO;
 
   mount(element: HTMLElement): void {
@@ -42,6 +48,7 @@ export class ModelProbePanel {
     if (this.mountElement) this.mountElement.replaceChildren();
     this.mountElement = null;
     this.lastDiagnostic = null;
+    this.lastVerification = null;
   }
 
   private render(): void {
@@ -49,11 +56,15 @@ export class ModelProbePanel {
     if (!mount || this.destroyed) return;
     const candidate = this.candidate;
     const diagnostic = this.lastDiagnostic;
+    const verification = this.lastVerification;
     const record = diagnostic?.probe;
     const compatibility = diagnostic?.codecCompatibility;
     const options = DETECTOR_CANDIDATES
       .map((value) => `<option value="${this.escapeHtml(value.id)}" ${value.id === candidate.id ? 'selected' : ''}>${this.escapeHtml(value.displayName)}</option>`)
       .join('');
+    const findings = verification?.findings
+      .map((finding) => `<li><strong>${finding.severity}</strong> · ${this.escapeHtml(finding.code)} · ${this.escapeHtml(finding.message)}</li>`)
+      .join('') ?? '';
 
     mount.innerHTML = `
       <section class="node-runtime-shell probe-shell">
@@ -61,7 +72,7 @@ export class ModelProbePanel {
           <div>
             <div class="eyebrow">Diagnóstico ONNX</div>
             <h2>Inspección reproducible del checkpoint</h2>
-            <p>Selecciona un artefacto registrado. Konta2r verifica SHA-256, observa el contrato IO real y luego evalúa su compatibilidad con el codec declarado. No ejecuta inferencia de detección durante este probe.</p>
+            <p>Selecciona un artefacto registrado. Konta2r verifica SHA-256, observa el contrato IO real y luego evalúa su compatibilidad con el codec declarado. También puedes revisar localmente un diagnóstico JSON guardado.</p>
           </div>
           <a class="probe-back" href="./">Volver al nodo</a>
         </header>
@@ -81,7 +92,7 @@ export class ModelProbePanel {
             <div><dt>Licencia declarada</dt><dd>${this.escapeHtml(candidate.artifact.declaredLicense)}</dd></div>
             <div><dt>Redistribución verificada</dt><dd>${candidate.artifact.redistributionVerified ? 'sí' : 'no'}</dd></div>
           </dl>
-          <p class="runtime-note">Esta prueba descargará aproximadamente ${candidate.artifact.approximateSizeMb ?? 67} MB desde la fuente externa. El archivo no se entrega a ONNX Runtime si su SHA-256 difiere del registro. Un resultado compatible no cambia automáticamente el estado <code>${candidate.status}</code>.</p>
+          <p class="runtime-note">Esta prueba descargará aproximadamente ${candidate.artifact.approximateSizeMb ?? 67} MB desde la fuente externa. El archivo no se entrega a ONNX Runtime si su SHA-256 difiere del registro. Un resultado técnico no cambia automáticamente el estado <code>${candidate.status}</code>.</p>
           ${compatibility ? `
             <div class="probe-compatibility" data-probe-compatibility>
               <strong>Compatibilidad de codec: ${compatibility.status}</strong>
@@ -90,12 +101,24 @@ export class ModelProbePanel {
               ${compatibility.warnings.length > 0 ? `<p>Advertencias: ${this.escapeHtml(compatibility.warnings.join(' · '))}</p>` : ''}
             </div>
           ` : ''}
+          ${verification ? `
+            <div class="probe-verification" data-verification-status="${verification.status}">
+              <strong>Dictamen técnico: ${verification.status}</strong>
+              <span>SHA-256 registrado: ${this.escapeHtml(verification.artifactSha256)}</span>
+              ${findings.length > 0 ? `<ul>${findings}</ul>` : '<p>Sin hallazgos técnicos. El diagnóstico es suficiente para proponer <code>probe_verified</code> mediante un PR revisable.</p>'}
+              <p>Este dictamen no decide licencia, precisión ni selección del detector.</p>
+            </div>
+          ` : ''}
           <div class="node-runtime-controls">
             <button class="action" type="button" data-probe-start ${this.running ? 'disabled' : ''}>${this.running ? 'Inspeccionando…' : 'Verificar e inspeccionar modelo'}</button>
+            <label class="action secondary probe-import-label ${this.running ? 'disabled' : ''}">
+              Revisar diagnóstico JSON
+              <input class="probe-import-input" data-probe-import type="file" accept="application/json,.json" ${this.running ? 'disabled' : ''}>
+            </label>
             ${diagnostic ? '<button class="action secondary" type="button" data-probe-copy>Copiar diagnóstico JSON</button><button class="action secondary" type="button" data-probe-download>Guardar diagnóstico JSON</button>' : ''}
           </div>
           <div class="runtime-error hidden" data-probe-error></div>
-          <div class="probe-progress ${record ? '' : 'hidden'}" data-probe-progress>${record ? `Último probe: ${record.probedAtIso} · metadata ${record.metadataCompleteness} · codec ${compatibility?.status ?? 'no evaluado'}` : ''}</div>
+          <div class="probe-progress ${record ? '' : 'hidden'}" data-probe-progress>${record ? `Probe: ${record.probedAtIso} · metadata ${record.metadataCompleteness} · codec ${compatibility?.status ?? 'no evaluado'} · dictamen ${verification?.status ?? 'sin revisar'}` : ''}</div>
           <pre class="probe-output ${diagnostic ? '' : 'hidden'}" data-probe-output>${diagnostic ? this.escapeHtml(serializeOnnxCandidateProbeDiagnosticRecord(diagnostic)) : ''}</pre>
         </div>
       </section>
@@ -108,10 +131,17 @@ export class ModelProbePanel {
       if (!next || next.id === this.candidate.id) return;
       this.candidate = next;
       this.lastDiagnostic = null;
+      this.lastVerification = null;
       this.render();
     });
     mount.querySelector<HTMLButtonElement>('[data-probe-start]')?.addEventListener('click', () => {
       void this.runProbe();
+    });
+    const importInput = mount.querySelector<HTMLInputElement>('[data-probe-import]');
+    importInput?.addEventListener('change', () => {
+      const file = importInput.files?.[0];
+      importInput.value = '';
+      if (file) void this.importDiagnostic(file);
     });
     mount.querySelector<HTMLButtonElement>('[data-probe-copy]')?.addEventListener('click', () => {
       void this.copyRecord();
@@ -125,6 +155,7 @@ export class ModelProbePanel {
     if (this.running || this.destroyed) return;
     this.running = true;
     this.lastDiagnostic = null;
+    this.lastVerification = null;
     this.render();
     const mount = this.mountElement;
     const progress = mount?.querySelector<HTMLElement>('[data-probe-progress]');
@@ -148,7 +179,9 @@ export class ModelProbePanel {
 
       const probeRecord = buildOnnxProbeRecord(candidateAtStart, artifact, result);
       const compatibility = assessCandidateProbeCompatibility(candidateAtStart, result);
-      this.lastDiagnostic = buildOnnxCandidateProbeDiagnosticRecord(probeRecord, compatibility);
+      const diagnostic = buildOnnxCandidateProbeDiagnosticRecord(probeRecord, compatibility);
+      this.lastDiagnostic = diagnostic;
+      this.lastVerification = verifyCandidateProbeDiagnostic(candidateAtStart, diagnostic);
       this.running = false;
       this.render();
     } catch (error) {
@@ -166,6 +199,24 @@ export class ModelProbePanel {
       }
       const select = this.mountElement?.querySelector<HTMLSelectElement>('[data-probe-candidate]');
       if (select) select.disabled = false;
+      const imported = this.mountElement?.querySelector<HTMLInputElement>('[data-probe-import]');
+      if (imported) imported.disabled = false;
+    }
+  }
+
+  private async importDiagnostic(file: File): Promise<void> {
+    if (this.running || this.destroyed) return;
+    try {
+      const review = reviewImportedProbeDiagnostic(await file.text());
+      if (this.destroyed) return;
+      this.candidate = review.candidate;
+      this.lastDiagnostic = review.diagnostic;
+      this.lastVerification = review.verification;
+      this.render();
+      const progress = this.mountElement?.querySelector<HTMLElement>('[data-probe-progress]');
+      if (progress) progress.textContent = `Diagnóstico local revisado · ${file.name} · dictamen ${review.verification.status}`;
+    } catch (error) {
+      this.showTransientError(error instanceof Error ? error.message : 'diagnostic_import_failed');
     }
   }
 

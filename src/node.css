@@ -144,6 +144,36 @@
 .probe-compatibility strong { color: #bfdbfe; text-transform: uppercase; letter-spacing: .04em; }
 .probe-compatibility span { color: #94a3b8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .probe-compatibility p { margin: 2px 0 0; line-height: 1.45; }
+.probe-import-label { display: inline-flex; align-items: center; cursor: pointer; }
+.probe-import-label.disabled { opacity: .42; cursor: not-allowed; }
+.probe-import-input { display: none; }
+.probe-verification {
+  display: grid;
+  gap: 6px;
+  margin: 0 12px 12px;
+  padding: 11px 12px;
+  border-radius: 13px;
+  font-size: .72rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  background: rgba(120, 53, 15, .16);
+  border: 1px solid rgba(251, 191, 36, .2);
+  color: #fde68a;
+}
+.probe-verification[data-verification-status="verified"] {
+  background: rgba(6, 78, 59, .22);
+  border-color: rgba(52, 211, 153, .24);
+  color: #d1fae5;
+}
+.probe-verification[data-verification-status="rejected"] {
+  background: rgba(127, 29, 29, .2);
+  border-color: rgba(248, 113, 113, .24);
+  color: #fecaca;
+}
+.probe-verification strong { text-transform: uppercase; letter-spacing: .04em; }
+.probe-verification span { color: #94a3b8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.probe-verification p { margin: 0; }
+.probe-verification ul { margin: 2px 0; padding-left: 18px; }
 .probe-progress {
   margin: 0 12px 12px;
   padding: 10px 12px;
