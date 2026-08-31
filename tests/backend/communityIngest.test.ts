@@ -151,9 +151,13 @@ describe('community ingest contract', () => {
     expect(duplicate.statusCode).toBe(200);
     expect(duplicate.outcome).toBe('duplicate');
 
+    const originalRecord = original.records[0];
+    if (!originalRecord || originalRecord.aggregateType !== 'flow') {
+      throw new Error('Expected flow fixture');
+    }
     const altered = envelope({
       records: [{
-        ...original.records[0]!,
+        ...originalRecord,
         count: 999,
       }],
     });
