@@ -35,9 +35,14 @@ export class NodeCameraController {
   private stream: MediaStream | null = null;
   private video: HTMLVideoElement | null = null;
   private currentProfile: NodePerformanceProfile | null = null;
+  private endedHandler: (() => void) | null = null;
 
   supported(): boolean {
     return Boolean(navigator.mediaDevices?.getUserMedia);
+  }
+
+  onUnexpectedEnd(handler: (() => void) | null): void {
+    this.endedHandler = handler;
   }
 
   async start(
@@ -51,6 +56,15 @@ export class NodeCameraController {
     this.stream = stream;
     this.video = video;
     this.currentProfile = profile;
+    const videoTrack = stream.getVideoTracks()[0];
+    videoTrack?.addEventListener('ended', () => {
+      if (this.stream !== stream) return;
+      this.stream = null;
+      this.currentProfile = null;
+      if (this.video) this.video.srcObject = null;
+      this.endedHandler?.();
+    }, { once: true });
+
     video.srcObject = stream;
     video.muted = true;
     video.playsInline = true;
@@ -66,12 +80,13 @@ export class NodeCameraController {
   }
 
   async stop(): Promise<void> {
-    if (this.stream) {
-      for (const track of this.stream.getTracks()) track.stop();
-    }
-    if (this.video) this.video.srcObject = null;
+    const stream = this.stream;
     this.stream = null;
     this.currentProfile = null;
+    if (stream) {
+      for (const track of stream.getTracks()) track.stop();
+    }
+    if (this.video) this.video.srcObject = null;
   }
 
   state(): CameraRuntimeState {
