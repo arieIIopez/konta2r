@@ -15,6 +15,7 @@ import type { SpatialTrackSample } from './spatial/types';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
+const root: HTMLDivElement = app;
 
 const demoCalibration: CalibrationFitResult = {
   imageToGroundH: [1, 0, 0, 0, 1, 0, 0, 0, 1],
@@ -112,7 +113,7 @@ function qualityRow(label: string, value: number): string {
 
 function renderShell(): void {
   const report = currentReport();
-  app.innerHTML = `
+  root.innerHTML = `
     <main class="shell">
       <header class="topbar">
         <div class="brand">
