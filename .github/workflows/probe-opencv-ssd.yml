@@ -1,0 +1,44 @@
+name: probe-opencv-ssd
+
+on:
+  push:
+    branches:
+      - evidence/probe-opencv-ssd
+    paths:
+      - scripts/probe-opencv-ssd.mjs
+      - .github/workflows/probe-opencv-ssd.yml
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci
+
+      - name: Probe registered OpenCV SSD checkpoint
+        run: node scripts/probe-opencv-ssd.mjs
+
+      - name: Upload diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencv-ssd-probe-diagnostic
+          path: artifacts/opencv-ssd-probe.json
+          if-no-files-found: warn
+          retention-days: 30
