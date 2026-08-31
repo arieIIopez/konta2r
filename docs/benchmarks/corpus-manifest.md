@@ -44,15 +44,29 @@ Cada secuencia registra:
 
 Estos campos describen cobertura. No crean por sí mismos representatividad estadística.
 
+## Builder local
+
+`?diagnostics=manifest-build` evita editar hashes y `sequenceId` manualmente. Para cada secuencia:
+
+1. se selecciona el JSON producido por el anotador;
+2. se selecciona el video/medio correspondiente cuando existe;
+3. se declara split, `siteId` opaco y descriptores experimentales;
+4. Konta2r deriva `sequenceId` desde las anotaciones;
+5. calcula SHA-256 sobre los bytes locales en memoria acotada;
+6. si las anotaciones ya declaran `source.mediaSha256`, el medio seleccionado debe reproducir exactamente ese hash;
+7. la secuencia solo se añade si el manifest completo sigue superando `validateCorpusManifest()`.
+
+El video no entra al JSON ni se persiste en el builder. Solo se conserva su digest.
+
 ## Flujo recomendado
 
 1. Anotar cada secuencia con `?diagnostics=annotate`.
 2. Revisar composición intrasecuencia con `?diagnostics=corpus`.
-3. Calcular SHA-256 de anotaciones y video local.
+3. Construir entradas y hashes con `?diagnostics=manifest-build`.
 4. Asignar splits y pseudónimos de sitio antes de evaluar el held-out.
 5. Congelar el `CorpusManifest`.
 6. Revisar cobertura multi-secuencia con `?diagnostics=manifest`.
-7. Ejecutar benchmarks de desarrollo/validación.
+7. Ejecutar benchmarks de development/validation.
 8. No consultar el held-out para decisiones de tuning.
 9. Ejecutar held-out final y archivar reportes/versiones.
 
