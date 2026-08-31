@@ -1,4 +1,5 @@
 import type { DetectorCandidateRecord } from './modelCandidates';
+import type { BenchmarkManifestIdentity } from './benchmarkManifestLink';
 import {
   createDetectorBenchmarkReport,
   type BenchmarkConfidenceAnalysis,
@@ -44,6 +45,8 @@ export interface ExternalBenchmarkSessionOptions {
   notes?: readonly string[];
   /** Externally computed file hashes override manifest values embedded in the sequence JSON. */
   corpusHashes?: ExternalBenchmarkCorpusHashes;
+  /** Identity produced only after matching sequence/hash data against frozen manifest bytes. */
+  manifestIdentity?: BenchmarkManifestIdentity;
   detector?: ExternalCandidateDetectorFactoryOptions;
   benchmark?: {
     iouThreshold?: number;
@@ -65,6 +68,7 @@ export interface ExternalBenchmarkSessionResult {
 function corpusFromSequence(
   sequence: AnnotatedBenchmarkSequence,
   hashes: ExternalBenchmarkCorpusHashes | undefined,
+  manifestIdentity: BenchmarkManifestIdentity | undefined,
 ): DetectorBenchmarkReport['corpus'] {
   const annotationSha256 = hashes?.annotationSha256 ?? sequence.source?.annotationSha256;
   const mediaSha256 = hashes?.mediaSha256 ?? sequence.source?.mediaSha256;
@@ -74,6 +78,7 @@ function corpusFromSequence(
     frameCount: sequence.frames.length,
     ...(annotationSha256 === undefined ? {} : { annotationSha256 }),
     ...(mediaSha256 === undefined ? {} : { mediaSha256 }),
+    ...(manifestIdentity === undefined ? {} : { manifest: { ...manifestIdentity } }),
   };
 }
 
@@ -178,7 +183,7 @@ export async function runExternalCandidateBenchmarkSession(
   const report = createDetectorBenchmarkReport({
     runId: options.runId,
     ...(options.createdAtIso === undefined ? {} : { createdAtIso: options.createdAtIso }),
-    corpus: corpusFromSequence(sequence, options.corpusHashes),
+    corpus: corpusFromSequence(sequence, options.corpusHashes, options.manifestIdentity),
     device: { ...options.device },
     benchmark,
     ...(confidence === undefined ? {} : { confidence }),
@@ -191,6 +196,13 @@ export async function runExternalCandidateBenchmarkSession(
       ...(options.corpusHashes?.mediaSha256 === undefined
         ? []
         : ['media_sha256_source:externally_computed_file_bytes']),
+      ...(options.manifestIdentity === undefined
+        ? []
+        : [
+            'corpus_manifest_sha256_source:externally_computed_file_bytes',
+            `corpus_manifest_id:${options.manifestIdentity.corpusId}`,
+            `corpus_split:${options.manifestIdentity.split}`,
+          ]),
       ...(confidence === undefined
         ? []
         : [
