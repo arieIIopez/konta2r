@@ -6,6 +6,8 @@ import {
   type GroundTruthOcclusion,
 } from './benchmarkDataset';
 
+export type { AnnotatedBenchmarkSequence } from './benchmarkDataset';
+
 function objectValue(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);

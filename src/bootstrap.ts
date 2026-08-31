@@ -14,6 +14,14 @@ async function bootstrap(): Promise<void> {
     window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
     return;
   }
+  if (diagnostics === 'benchmark') {
+    await import('./benchmark.css');
+    const { BenchmarkPanel } = await import('./diagnostics/benchmarkPanel');
+    const panel = new BenchmarkPanel();
+    panel.mount(mount);
+    window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
+    return;
+  }
 
   await import('./main');
   const { NodePanel } = await import('./node/nodePanel');
