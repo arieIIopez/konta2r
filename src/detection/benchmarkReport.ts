@@ -1,4 +1,9 @@
 import type { AnnotatedDetectorBenchmarkResult, RecallStratum } from './annotatedBenchmark';
+import type {
+  ConfidenceSweepPoint,
+  ConfidenceSweepResult,
+  ObservedBestClassThreshold,
+} from './confidenceSweep';
 
 export interface BenchmarkCorpusIdentity {
   datasetId: string;
@@ -16,6 +21,11 @@ export interface BenchmarkDeviceIdentity {
   webgpuAvailable?: boolean;
 }
 
+export interface BenchmarkConfidenceAnalysis {
+  operatingConfidenceThreshold: number;
+  sweep: ConfidenceSweepResult;
+}
+
 export interface DetectorBenchmarkReport {
   schemaVersion: '1';
   runId: string;
@@ -23,6 +33,7 @@ export interface DetectorBenchmarkReport {
   corpus: BenchmarkCorpusIdentity;
   device: BenchmarkDeviceIdentity;
   benchmark: AnnotatedDetectorBenchmarkResult;
+  confidence?: BenchmarkConfidenceAnalysis;
   notes?: string[];
 }
 
@@ -32,6 +43,7 @@ export interface BenchmarkReportInput {
   corpus: BenchmarkCorpusIdentity;
   device: BenchmarkDeviceIdentity;
   benchmark: AnnotatedDetectorBenchmarkResult;
+  confidence?: BenchmarkConfidenceAnalysis;
   notes?: readonly string[];
 }
 
@@ -39,9 +51,52 @@ function cloneRecallStrata(values: readonly RecallStratum[]): RecallStratum[] {
   return values.map((value) => ({ ...value }));
 }
 
+function cloneSweepPoint(point: ConfidenceSweepPoint): ConfidenceSweepPoint {
+  return {
+    threshold: point.threshold,
+    macroF1: point.macroF1,
+    classMetrics: point.classMetrics.map((metric) => ({ ...metric })),
+  };
+}
+
+function cloneBestClass(value: ObservedBestClassThreshold): ObservedBestClassThreshold {
+  return { ...value };
+}
+
+function cloneConfidenceAnalysis(value: BenchmarkConfidenceAnalysis): BenchmarkConfidenceAnalysis {
+  return {
+    operatingConfidenceThreshold: value.operatingConfidenceThreshold,
+    sweep: {
+      schemaVersion: '1',
+      iouThreshold: value.sweep.iouThreshold,
+      thresholds: [...value.sweep.thresholds],
+      points: value.sweep.points.map(cloneSweepPoint),
+      bestObservedMacroF1: value.sweep.bestObservedMacroF1
+        ? { ...value.sweep.bestObservedMacroF1 }
+        : null,
+      bestObservedByClass: value.sweep.bestObservedByClass.map(cloneBestClass),
+    },
+  };
+}
+
 function assertSha256IfPresent(value: string | undefined, label: string): void {
   if (value === undefined) return;
   if (!/^[a-f0-9]{64}$/i.test(value)) throw new Error(`${label} must be a SHA-256 hex digest`);
+}
+
+function assertConfidenceAnalysis(
+  confidence: BenchmarkConfidenceAnalysis | undefined,
+  benchmark: AnnotatedDetectorBenchmarkResult,
+): void {
+  if (!confidence) return;
+  if (!Number.isFinite(confidence.operatingConfidenceThreshold)
+    || confidence.operatingConfidenceThreshold < 0
+    || confidence.operatingConfidenceThreshold > 1) {
+    throw new Error('operatingConfidenceThreshold must be within [0, 1]');
+  }
+  if (Math.abs(confidence.sweep.iouThreshold - benchmark.matching.iouThreshold) > 1e-12) {
+    throw new Error('confidence sweep IoU must match benchmark matching IoU');
+  }
 }
 
 export function createDetectorBenchmarkReport(input: BenchmarkReportInput): DetectorBenchmarkReport {
@@ -56,6 +111,7 @@ export function createDetectorBenchmarkReport(input: BenchmarkReportInput): Dete
   if (input.device.label.trim().length === 0) throw new Error('device label is required');
   assertSha256IfPresent(input.corpus.annotationSha256, 'annotationSha256');
   assertSha256IfPresent(input.corpus.mediaSha256, 'mediaSha256');
+  assertConfidenceAnalysis(input.confidence, input.benchmark);
 
   const createdAtIso = input.createdAtIso ?? new Date().toISOString();
   if (Number.isNaN(Date.parse(createdAtIso))) throw new Error('createdAtIso must be a valid ISO date');
@@ -98,6 +154,7 @@ export function createDetectorBenchmarkReport(input: BenchmarkReportInput): Dete
         matches: frame.matches.map((match) => ({ ...match })),
       })),
     },
+    ...(input.confidence === undefined ? {} : { confidence: cloneConfidenceAnalysis(input.confidence) }),
     ...(input.notes === undefined ? {} : { notes: [...input.notes] }),
   };
 }
@@ -119,7 +176,8 @@ function csvRow(values: readonly (string | number | boolean | undefined)[]): str
 export function detectorBenchmarkSummaryCsv(report: DetectorBenchmarkReport): string {
   const header = [
     'runId', 'createdAtIso', 'datasetId', 'device', 'modelId', 'modelVersion', 'modelSha256',
-    'backend', 'runtime', 'runtimeVersion', 'iouThreshold', 'frameCount', 'className',
+    'backend', 'runtime', 'runtimeVersion', 'iouThreshold', 'operatingConfidenceThreshold',
+    'bestObservedMacroF1Threshold', 'bestObservedMacroF1', 'frameCount', 'className',
     'tp', 'fp', 'fn', 'precision', 'recall', 'f1', 'macroF1', 'matchedIoUMean',
     'totalMsP50', 'totalMsP95', 'inferenceMsP50', 'inferenceMsP95', 'effectiveInferenceFps',
     'latencyDriftRatio', 'seekSampleCount', 'seekAbsErrorMeanMs', 'seekAbsErrorMaxMs',
@@ -136,6 +194,9 @@ export function detectorBenchmarkSummaryCsv(report: DetectorBenchmarkReport): st
     report.benchmark.detector.runtime.runtime,
     report.benchmark.detector.runtime.runtimeVersion,
     report.benchmark.matching.iouThreshold,
+    report.confidence?.operatingConfidenceThreshold,
+    report.confidence?.sweep.bestObservedMacroF1?.threshold,
+    report.confidence?.sweep.bestObservedMacroF1?.macroF1,
     report.benchmark.frameCount,
     metric.className,
     metric.truePositive,
@@ -189,4 +250,36 @@ export function detectorBenchmarkStrataCsv(report: DetectorBenchmarkReport): str
     ...stratumRows(report, 'image_scale', report.benchmark.recallByImageScale),
     ...stratumRows(report, 'occlusion', report.benchmark.recallByOcclusion),
   ].join('\n')}\n`;
+}
+
+export function detectorBenchmarkConfidenceSweepCsv(report: DetectorBenchmarkReport): string {
+  const confidence = report.confidence;
+  const header = [
+    'runId', 'datasetId', 'device', 'modelId', 'iouThreshold', 'threshold', 'className',
+    'tp', 'fp', 'fn', 'precision', 'recall', 'f1', 'macroF1', 'operatingPoint',
+  ];
+  if (!confidence) return `${csvRow(header)}\n`;
+  const rows: string[] = [];
+  for (const point of confidence.sweep.points) {
+    for (const metric of point.classMetrics) {
+      rows.push(csvRow([
+        report.runId,
+        report.corpus.datasetId,
+        report.device.label,
+        report.benchmark.detector.model.modelId,
+        confidence.sweep.iouThreshold,
+        point.threshold,
+        metric.className,
+        metric.truePositive,
+        metric.falsePositive,
+        metric.falseNegative,
+        metric.precision,
+        metric.recall,
+        metric.f1,
+        point.macroF1,
+        Math.abs(point.threshold - confidence.operatingConfidenceThreshold) <= 1e-12,
+      ]));
+    }
+  }
+  return `${[csvRow(header), ...rows].join('\n')}\n`;
 }

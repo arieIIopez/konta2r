@@ -1,6 +1,7 @@
 import type { DetectorCandidateRecord } from './modelCandidates';
 import {
   createDetectorBenchmarkReport,
+  type BenchmarkConfidenceAnalysis,
   type BenchmarkDeviceIdentity,
   type DetectorBenchmarkReport,
 } from './benchmarkReport';
@@ -10,6 +11,7 @@ import {
   type BenchmarkValidityAssessment,
   type BenchmarkValidityPolicy,
 } from './benchmarkValidity';
+import { DEFAULT_CONFIDENCE_SWEEP_THRESHOLDS } from './confidenceSweep';
 import {
   buildExternalCandidateDetector,
   type ExternalCandidateDetectorFactoryOptions,
@@ -21,12 +23,18 @@ import {
   type BenchmarkFrameProvider,
   type StreamingBenchmarkProgress,
 } from './streamingBenchmark';
+import { runStreamingAnnotatedBenchmarkWithConfidenceSweep } from './streamingConfidenceBenchmark';
 
 export interface ExternalBenchmarkCorpusHashes {
   /** SHA-256 computed from the actual annotation file bytes, outside that file. */
   annotationSha256?: string;
   /** SHA-256 computed from the actual local video/media bytes. */
   mediaSha256?: string;
+}
+
+export interface ExternalBenchmarkConfidenceOptions {
+  operatingConfidenceThreshold?: number;
+  sweepThresholds?: readonly number[];
 }
 
 export interface ExternalBenchmarkSessionOptions {
@@ -41,6 +49,8 @@ export interface ExternalBenchmarkSessionOptions {
     iouThreshold?: number;
     imageScaleThresholds?: ImageScaleThresholds;
     onProgress?: (progress: StreamingBenchmarkProgress) => void;
+    /** Optional one-pass confidence analysis. If omitted, legacy single-point evaluation is used. */
+    confidence?: ExternalBenchmarkConfidenceOptions;
   };
   validity?: BenchmarkValidityPolicy;
 }
@@ -67,6 +77,25 @@ function corpusFromSequence(
   };
 }
 
+function minimumSweepThreshold(values: readonly number[] | undefined): number {
+  const thresholds = values ?? DEFAULT_CONFIDENCE_SWEEP_THRESHOLDS;
+  if (thresholds.length === 0) throw new Error('confidence sweep requires at least one threshold');
+  return Math.min(...thresholds);
+}
+
+function assertDetectorRetainsSweepEvidence(
+  detector: ExternalCandidateDetectorFactoryOptions | undefined,
+  confidence: ExternalBenchmarkConfidenceOptions,
+): void {
+  const detectorFloor = detector?.minConfidence ?? 0;
+  const sweepFloor = minimumSweepThreshold(confidence.sweepThresholds);
+  if (detectorFloor > sweepFloor + 1e-12) {
+    throw new Error(
+      `Detector minConfidence ${detectorFloor} exceeds confidence sweep floor ${sweepFloor}; filtered detections cannot be recovered`,
+    );
+  }
+}
+
 /**
  * End-to-end experimental benchmark boundary for an external model:
  * verified bytes + verified probe → detector → streaming annotated benchmark →
@@ -84,6 +113,9 @@ export async function runExternalCandidateBenchmarkSession(
   options: ExternalBenchmarkSessionOptions,
 ): Promise<ExternalBenchmarkSessionResult> {
   if (options.runId.trim().length === 0) throw new Error('runId is required');
+  const confidenceOptions = options.benchmark?.confidence;
+  if (confidenceOptions) assertDetectorRetainsSweepEvidence(options.detector, confidenceOptions);
+
   const built = buildExternalCandidateDetector(
     candidate,
     artifact,
@@ -91,23 +123,57 @@ export async function runExternalCandidateBenchmarkSession(
     options.detector,
   );
 
-  const benchmark = await runStreamingAnnotatedBenchmark(
-    built.detector,
-    sequence,
-    provider,
-    {
-      ...(options.benchmark?.iouThreshold === undefined
-        ? {}
-        : { iouThreshold: options.benchmark.iouThreshold }),
-      ...(options.benchmark?.imageScaleThresholds === undefined
-        ? {}
-        : { imageScaleThresholds: options.benchmark.imageScaleThresholds }),
-      ...(options.benchmark?.onProgress === undefined
-        ? {}
-        : { onProgress: options.benchmark.onProgress }),
-      disposeDetectorAfterRun: true,
-    },
-  );
+  let benchmark: Awaited<ReturnType<typeof runStreamingAnnotatedBenchmark>>;
+  let confidence: BenchmarkConfidenceAnalysis | undefined;
+
+  if (confidenceOptions) {
+    const result = await runStreamingAnnotatedBenchmarkWithConfidenceSweep(
+      built.detector,
+      sequence,
+      provider,
+      {
+        ...(confidenceOptions.operatingConfidenceThreshold === undefined
+          ? {}
+          : { operatingConfidenceThreshold: confidenceOptions.operatingConfidenceThreshold }),
+        ...(confidenceOptions.sweepThresholds === undefined
+          ? {}
+          : { sweepThresholds: confidenceOptions.sweepThresholds }),
+        ...(options.benchmark?.iouThreshold === undefined
+          ? {}
+          : { iouThreshold: options.benchmark.iouThreshold }),
+        ...(options.benchmark?.imageScaleThresholds === undefined
+          ? {}
+          : { imageScaleThresholds: options.benchmark.imageScaleThresholds }),
+        ...(options.benchmark?.onProgress === undefined
+          ? {}
+          : { onProgress: options.benchmark.onProgress }),
+        disposeDetectorAfterRun: true,
+      },
+    );
+    benchmark = result.benchmark;
+    confidence = {
+      operatingConfidenceThreshold: result.operatingConfidenceThreshold,
+      sweep: result.confidenceSweep,
+    };
+  } else {
+    benchmark = await runStreamingAnnotatedBenchmark(
+      built.detector,
+      sequence,
+      provider,
+      {
+        ...(options.benchmark?.iouThreshold === undefined
+          ? {}
+          : { iouThreshold: options.benchmark.iouThreshold }),
+        ...(options.benchmark?.imageScaleThresholds === undefined
+          ? {}
+          : { imageScaleThresholds: options.benchmark.imageScaleThresholds }),
+        ...(options.benchmark?.onProgress === undefined
+          ? {}
+          : { onProgress: options.benchmark.onProgress }),
+        disposeDetectorAfterRun: true,
+      },
+    );
+  }
 
   const report = createDetectorBenchmarkReport({
     runId: options.runId,
@@ -115,6 +181,7 @@ export async function runExternalCandidateBenchmarkSession(
     corpus: corpusFromSequence(sequence, options.corpusHashes),
     device: { ...options.device },
     benchmark,
+    ...(confidence === undefined ? {} : { confidence }),
     notes: [
       `external_candidate:${candidate.id}`,
       'Checkpoint executed from externally supplied verified bytes; not bundled by Konta2r.',
@@ -124,6 +191,13 @@ export async function runExternalCandidateBenchmarkSession(
       ...(options.corpusHashes?.mediaSha256 === undefined
         ? []
         : ['media_sha256_source:externally_computed_file_bytes']),
+      ...(confidence === undefined
+        ? []
+        : [
+            `operating_confidence_threshold:${confidence.operatingConfidenceThreshold}`,
+            `confidence_sweep_floor:${confidence.sweep.thresholds[0] ?? 'none'}`,
+            `confidence_sweep_points:${confidence.sweep.thresholds.length}`,
+          ]),
       ...(options.notes ?? []),
     ],
   });

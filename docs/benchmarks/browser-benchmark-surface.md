@@ -36,11 +36,13 @@ En perfil `development`:
 
 `currentTime` se utiliza para solicitar el seek, pero no se trata por sí solo como evidencia del frame efectivamente presentado.
 
-## Métricas
+## Métricas y confidence
 
-La primera superficie usa:
+La superficie usa:
 
-- `minConfidence = 0.50` fijo;
+- piso de retención del adapter `minConfidence = 0.05`;
+- punto operativo de evaluación `confidence = 0.50`;
+- sweep de confidence 0.05–0.95 en incrementos de 0.05;
 - IoU de matching configurable, inicialmente 0.50;
 - matching uno-a-uno por clase;
 - precision, recall y F1 por clase;
@@ -50,15 +52,20 @@ La primera superficie usa:
 - latencia e inference FPS;
 - error temporal de seek cuando está disponible.
 
-El F1 mostrado es una medición a un umbral de confianza y un umbral IoU concretos. **No es mAP COCO** y no debe denominarse así.
+La red neuronal se ejecuta una sola vez por frame. Las detecciones retenidas desde 0.05 se reutilizan para evaluar el punto operativo y todos los puntos del sweep. Si el adapter hubiese filtrado por encima del menor umbral solicitado, la sesión se rechaza porque la evidencia eliminada no puede reconstruirse.
+
+El reporte mantiene separado el punto operativo de los valores `bestObserved...`. El mejor F1 observado en el corpus es descriptivo y puede sobreajustarse a ese mismo corpus; no se interpreta automáticamente como umbral recomendado.
+
+El sweep produce puntos precision–recall discretos por clase y confidence. **No es mAP COCO**: todavía no integra Average Precision ni múltiples umbrales IoU según el protocolo COCO, por lo que no debe denominarse mAP.
 
 ## Salidas
 
 La interfaz puede exportar:
 
-- JSON completo de la sesión, incluyendo `report` y `validity`;
-- CSV resumen por clase;
-- CSV de recall estratificado por escala y oclusión.
+- JSON completo de la sesión, incluyendo `report`, `confidence` y `validity`;
+- CSV resumen del punto operativo por clase;
+- CSV de recall estratificado por escala y oclusión;
+- CSV del confidence sweep con precision, recall y F1 por clase/threshold.
 
 El resultado numérico y el dictamen científico permanecen separados. Un detector puede obtener buenas métricas y aun así producir una corrida `invalid` si la evidencia experimental no satisface el perfil seleccionado.
 
@@ -70,4 +77,6 @@ Los bytes completos del ONNX existen en memoria solamente después de verificar 
 
 ## Uso para selección de detector
 
-Una corrida aislada no selecciona un modelo. La decisión entre candidatos debe usar un corpus suficientemente diverso y comparar, como mínimo, calidad por clase/estrato, latencia p50/p95, estabilidad, backend, dispositivo y validez experimental. El benchmark debe repetirse en dispositivos representativos de los perfiles `eco`, `balanced` y `performance`.
+Una corrida aislada no selecciona un modelo. La decisión entre candidatos debe usar un corpus suficientemente diverso y comparar, como mínimo, calidad por clase/estrato, curvas de confidence, latencia p50/p95, estabilidad, backend, dispositivo y validez experimental. El benchmark debe repetirse en dispositivos representativos de los perfiles `eco`, `balanced` y `performance`.
+
+Los umbrales elegidos para operación final deben validarse en datos distintos de aquellos utilizados para explorarlos o ajustarlos. De lo contrario, el `bestObserved` solo describe el corpus de ajuste y no constituye evidencia de generalización.
