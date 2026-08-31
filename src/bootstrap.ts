@@ -15,6 +15,7 @@ async function bootstrap(): Promise<void> {
     return;
   }
   if (diagnostics === 'benchmark') {
+    await import('./benchmark.css');
     const { BenchmarkPanel } = await import('./diagnostics/benchmarkPanel');
     const panel = new BenchmarkPanel();
     panel.mount(mount);
