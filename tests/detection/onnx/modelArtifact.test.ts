@@ -26,18 +26,19 @@ describe('ONNX model artifact verification', () => {
   it('passes the downloaded ArrayBuffer directly to the digest boundary', async () => {
     const sourceBuffer = new ArrayBuffer(4);
     new Uint8Array(sourceBuffer).set([1, 2, 3, 4]);
-    let received: ArrayBuffer | null = null;
+    const observed = { isArrayBuffer: false, byteLength: -1 };
 
     const result = await fetchVerifiedOnnxArtifact('https://example.test/model.onnx', ABC_SHA256, {
       fetcher: async () => new Response(sourceBuffer, { status: 200 }),
       digest: async (buffer) => {
-        received = buffer;
+        observed.isArrayBuffer = buffer instanceof ArrayBuffer;
+        observed.byteLength = buffer.byteLength;
         return ABC_SHA256;
       },
     });
 
-    expect(received).toBeInstanceOf(ArrayBuffer);
-    expect(received?.byteLength).toBe(4);
+    expect(observed.isArrayBuffer).toBe(true);
+    expect(observed.byteLength).toBe(4);
     expect(result.sizeBytes).toBe(4);
   });
 
