@@ -85,6 +85,8 @@ class DetectionFactory implements OnnxSessionFactory {
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
+const HASH_C = 'c'.repeat(64);
+const HASH_D = 'd'.repeat(64);
 
 function sequence(includeMediaHash = true): AnnotatedBenchmarkSequence {
   return {
@@ -120,6 +122,14 @@ const provider: BenchmarkFrameProvider = {
   },
 };
 
+function detectorOptions(factory = new DetectionFactory()) {
+  return {
+    capabilities: { webgpu: false },
+    sessionFactory: factory,
+    ssdRgbResize: () => new Uint8Array(300 * 300 * 3),
+  } as const;
+}
+
 describe('external candidate benchmark session', () => {
   it('produces a valid selection-profile report when model, corpus and temporal evidence are complete', async () => {
     const factory = new DetectionFactory();
@@ -135,9 +145,7 @@ describe('external candidate benchmark session', () => {
         createdAtIso: '2026-08-31T04:00:00.000Z',
         device: { label: 'synthetic-edge', webgpuAvailable: false },
         detector: {
-          capabilities: { webgpu: false },
-          sessionFactory: factory,
-          ssdRgbResize: () => new Uint8Array(300 * 300 * 3),
+          ...detectorOptions(factory),
           minConfidence: 0.5,
         },
         benchmark: {
@@ -178,11 +186,7 @@ describe('external candidate benchmark session', () => {
       {
         runId: 'run-missing-media-hash',
         device: { label: 'synthetic-edge' },
-        detector: {
-          capabilities: { webgpu: false },
-          sessionFactory: new DetectionFactory(),
-          ssdRgbResize: () => new Uint8Array(300 * 300 * 3),
-        },
+        detector: detectorOptions(),
         validity: { profile: 'selection' },
       },
     );
@@ -202,16 +206,38 @@ describe('external candidate benchmark session', () => {
       {
         runId: 'run-development',
         device: { label: 'synthetic-edge' },
-        detector: {
-          capabilities: { webgpu: false },
-          sessionFactory: new DetectionFactory(),
-          ssdRgbResize: () => new Uint8Array(300 * 300 * 3),
-        },
+        detector: detectorOptions(),
         validity: { profile: 'development' },
       },
     );
 
     expect(result.validity.status).toBe('provisional');
     expect(result.validity.findings.find((finding) => finding.code === 'media_hash_missing')?.severity).toBe('warning');
+  });
+
+  it('uses externally computed file hashes instead of self-declared hashes embedded in annotation JSON', async () => {
+    const result = await runExternalCandidateBenchmarkSession(
+      OPENCV_SSD_MOBILENET_V2_COCO_2026JUL,
+      artifact(),
+      diagnostic(),
+      sequence(),
+      provider,
+      {
+        runId: 'run-external-hashes',
+        device: { label: 'synthetic-edge' },
+        corpusHashes: {
+          annotationSha256: HASH_C,
+          mediaSha256: HASH_D,
+        },
+        detector: detectorOptions(),
+        validity: { profile: 'selection' },
+      },
+    );
+
+    expect(result.report.corpus.annotationSha256).toBe(HASH_C);
+    expect(result.report.corpus.mediaSha256).toBe(HASH_D);
+    expect(result.report.notes).toContain('annotation_sha256_source:externally_computed_file_bytes');
+    expect(result.report.notes).toContain('media_sha256_source:externally_computed_file_bytes');
+    expect(result.validity.status).toBe('valid');
   });
 });
