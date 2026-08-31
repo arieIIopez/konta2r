@@ -77,13 +77,12 @@ create table if not exists public.nodes (
   constraint nodes_label_length check (char_length(trim(label)) between 1 and 120),
   constraint nodes_status check (status in ('provisioning', 'active', 'paused', 'revoked')),
   constraint nodes_revocation_consistency check (
-    (status = 'revoked' and revoked_at is not null)
-    or (status <> 'revoked')
+    (status = 'revoked') = (revoked_at is not null)
   )
 );
 
 comment on table public.nodes is
-  'Pseudonymous sensor registry. The owner relationship is private to the authenticated account and is never part of Community payloads.';
+  'Pseudonymous sensor registry. Browser roles can read owned nodes, but creation/lifecycle mutations go through controlled server endpoints.';
 
 create index if not exists nodes_owner_user_id_idx on public.nodes(owner_user_id);
 create index if not exists nodes_segment_id_idx on public.nodes(segment_id);
@@ -211,24 +210,16 @@ create policy "nodes_select_own"
   to authenticated
   using ((select auth.uid()) = owner_user_id);
 
-create policy "nodes_insert_own"
-  on public.nodes for insert
-  to authenticated
-  with check ((select auth.uid()) = owner_user_id);
+-- Node creation and lifecycle mutation deliberately have no browser RLS policy.
+-- They are performed only after explicit server-side authorization.
 
-create policy "nodes_update_own"
-  on public.nodes for update
-  to authenticated
-  using ((select auth.uid()) = owner_user_id)
-  with check ((select auth.uid()) = owner_user_id);
-
--- Object reachability is explicit and intentionally narrower than service-role access.
+-- Object reachability is explicit and intentionally narrower than privileged server access.
 revoke all on table public.profiles from anon, authenticated;
 revoke all on table public.nodes from anon, authenticated;
 revoke all on table public.segments from anon, authenticated;
 
 grant select, insert, update on table public.profiles to authenticated;
-grant select, insert, update on table public.nodes to authenticated;
+grant select on table public.nodes to authenticated;
 grant select on table public.segments to anon, authenticated;
 
 -- Private schema stays unreachable through the normal browser roles.
