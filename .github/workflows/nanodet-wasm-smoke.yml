@@ -1,0 +1,45 @@
+name: nanodet-onnxruntime-web-wasm-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/nanodet-wasm-smoke
+    paths:
+      - tools/smoke_nanodet_ort_web.mjs
+      - .github/workflows/nanodet-wasm-smoke.yml
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/nanodet-wasm-smoke
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Execute exact checkpoint with ONNX Runtime Web WASM
+        run: node tools/smoke_nanodet_ort_web.mjs
+
+      - name: Commit runtime smoke evidence
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/benchmarks/evidence/nanodet-m-plus-1.5x-416-ort-web-wasm-smoke.json
+          if git diff --cached --quiet; then
+            echo "Runtime evidence unchanged"
+            exit 0
+          fi
+          git commit -m "evidence: record NanoDet ONNX Runtime Web WASM smoke"
+          git push
