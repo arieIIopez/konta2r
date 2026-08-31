@@ -101,6 +101,17 @@ function assertDetectorRetainsSweepEvidence(
   }
 }
 
+function detectorOptionsForConfidenceSweep(
+  detector: ExternalCandidateDetectorFactoryOptions | undefined,
+  confidence: ExternalBenchmarkConfidenceOptions | undefined,
+): ExternalCandidateDetectorFactoryOptions | undefined {
+  if (!confidence || detector?.minConfidence !== undefined) return detector;
+  return {
+    ...(detector ?? {}),
+    minConfidence: minimumSweepThreshold(confidence.sweepThresholds),
+  };
+}
+
 /**
  * End-to-end experimental benchmark boundary for an external model:
  * verified bytes + verified probe → detector → streaming annotated benchmark →
@@ -119,13 +130,14 @@ export async function runExternalCandidateBenchmarkSession(
 ): Promise<ExternalBenchmarkSessionResult> {
   if (options.runId.trim().length === 0) throw new Error('runId is required');
   const confidenceOptions = options.benchmark?.confidence;
-  if (confidenceOptions) assertDetectorRetainsSweepEvidence(options.detector, confidenceOptions);
+  const detectorOptions = detectorOptionsForConfidenceSweep(options.detector, confidenceOptions);
+  if (confidenceOptions) assertDetectorRetainsSweepEvidence(detectorOptions, confidenceOptions);
 
   const built = buildExternalCandidateDetector(
     candidate,
     artifact,
     diagnostic,
-    options.detector,
+    detectorOptions,
   );
 
   let benchmark: Awaited<ReturnType<typeof runStreamingAnnotatedBenchmark>>;
