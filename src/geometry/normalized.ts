@@ -59,6 +59,37 @@ export function denormalizeImagePoint(
   };
 }
 
+/**
+ * Canonical image coordinates scale x and y by the same physical pixel scale:
+ * frame height. This preserves Euclidean angles/distances under resolution
+ * changes that keep the same aspect ratio (e.g. 1280x720 -> 640x360).
+ */
+export function imagePointToCanonical(
+  point: Point2D,
+  frameHeight: number,
+): Point2D {
+  assertDimension(frameHeight, 'frameHeight');
+  return {
+    x: point.x / frameHeight,
+    y: point.y / frameHeight,
+  };
+}
+
+export function normalizedPointToCanonical(
+  point: NormalizedPoint2D,
+  frameWidth: number,
+  frameHeight: number,
+): Point2D {
+  assertDimension(frameWidth, 'frameWidth');
+  assertDimension(frameHeight, 'frameHeight');
+  assertNormalizedPoint(point);
+  const aspectRatio = frameWidth / frameHeight;
+  return {
+    x: point.x * aspectRatio,
+    y: point.y,
+  };
+}
+
 export function validateNormalizedLine(line: NormalizedDirectedLine): void {
   assertNormalizedPoint(line.a);
   assertNormalizedPoint(line.b);
@@ -68,9 +99,9 @@ export function validateNormalizedLine(line: NormalizedDirectedLine): void {
 }
 
 /**
- * The geometry engine is unit-agnostic. This adapter exposes a normalized line
- * as a DirectedLine so crossings remain stable across capture resolution/profile
- * changes. A deadzone used with this line must therefore also be normalized.
+ * Exposes a normalized line directly in fraction coordinates. This is useful
+ * for topology-only operations; metric-like deadzones should instead use the
+ * aspect-correct canonical adapter below.
  */
 export function normalizedLineAsDirectedLine(line: NormalizedDirectedLine): DirectedLine {
   validateNormalizedLine(line);
@@ -78,6 +109,21 @@ export function normalizedLineAsDirectedLine(line: NormalizedDirectedLine): Dire
     id: line.id,
     a: { ...line.a },
     b: { ...line.b },
+    ...(line.labelLeftToRight === undefined ? {} : { labelLeftToRight: line.labelLeftToRight }),
+    ...(line.labelRightToLeft === undefined ? {} : { labelRightToLeft: line.labelRightToLeft }),
+  };
+}
+
+export function normalizedLineToCanonical(
+  line: NormalizedDirectedLine,
+  frameWidth: number,
+  frameHeight: number,
+): DirectedLine {
+  validateNormalizedLine(line);
+  return {
+    id: line.id,
+    a: normalizedPointToCanonical(line.a, frameWidth, frameHeight),
+    b: normalizedPointToCanonical(line.b, frameWidth, frameHeight),
     ...(line.labelLeftToRight === undefined ? {} : { labelLeftToRight: line.labelLeftToRight }),
     ...(line.labelRightToLeft === undefined ? {} : { labelRightToLeft: line.labelRightToLeft }),
   };
