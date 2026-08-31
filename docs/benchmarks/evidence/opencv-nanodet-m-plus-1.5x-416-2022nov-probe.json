@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "1",
+  "recordType": "onnx_candidate_probe_diagnostic",
+  "probe": {
+    "schemaVersion": "1.0",
+    "recordType": "onnx_model_probe",
+    "candidateId": "opencv-nanodet-m-plus-1.5x-416-2022nov",
+    "candidateDisplayName": "NanoDet-m-plus-1.5x 416 — OpenCV Zoo",
+    "artifact": {
+      "sourceUrl": "https://github.com/opencv/opencv_zoo/raw/main/models/object_detection_nanodet/object_detection_nanodet_2022nov.onnx",
+      "sha256": "4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186",
+      "sizeBytes": 3800954,
+      "declaredLicense": "Apache-2.0",
+      "redistributionVerified": false
+    },
+    "probedAtIso": "2026-08-31T18:40:04.309Z",
+    "runtime": {
+      "runtime": "onnxruntime-web",
+      "runtimeVersion": "1.29.0",
+      "backend": "wasm",
+      "executionProviders": ["wasm"]
+    },
+    "webgpuAttempted": false,
+    "inputs": [
+      {
+        "name": "input.1",
+        "kind": "tensor",
+        "type": "float32",
+        "shape": [1, 3, 416, 416]
+      }
+    ],
+    "outputs": [
+      { "name": "792", "kind": "tensor", "type": "float32", "shape": [1, 2704, 80] },
+      { "name": "814", "kind": "tensor", "type": "float32", "shape": [1, 676, 80] },
+      { "name": "836", "kind": "tensor", "type": "float32", "shape": [1, 169, 80] },
+      { "name": "795", "kind": "tensor", "type": "float32", "shape": [1, 2704, 32] },
+      { "name": "817", "kind": "tensor", "type": "float32", "shape": [1, 676, 32] },
+      { "name": "839", "kind": "tensor", "type": "float32", "shape": [1, 169, 32] }
+    ],
+    "metadataCompleteness": "complete",
+    "inputHintAssessment": {
+      "expectedWidth": 416,
+      "expectedHeight": 416,
+      "expectedLayout": "NCHW",
+      "observedShape": [1, 3, 416, 416],
+      "dimensionsMatch": true
+    },
+    "runtimeSmoke": {
+      "schemaVersion": "1",
+      "attempted": true,
+      "passed": true,
+      "input": {
+        "name": "input.1",
+        "type": "float32",
+        "shape": [1, 3, 416, 416]
+      },
+      "outputs": [
+        { "name": "792", "type": "float32", "shape": [1, 2704, 80], "dataLength": 216320 },
+        { "name": "814", "type": "float32", "shape": [1, 676, 80], "dataLength": 54080 },
+        { "name": "836", "type": "float32", "shape": [1, 169, 80], "dataLength": 13520 },
+        { "name": "795", "type": "float32", "shape": [1, 2704, 32], "dataLength": 86528 },
+        { "name": "817", "type": "float32", "shape": [1, 676, 32], "dataLength": 21632 },
+        { "name": "839", "type": "float32", "shape": [1, 169, 32], "dataLength": 5408 }
+      ],
+      "findings": []
+    }
+  },
+  "codecCompatibility": {
+    "schemaVersion": "1",
+    "candidateId": "opencv-nanodet-m-plus-1.5x-416-2022nov",
+    "codecId": "nanodet_plus_gfl",
+    "status": "compatible",
+    "errors": [],
+    "warnings": []
+  }
+}
