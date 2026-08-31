@@ -1,0 +1,44 @@
+name: probe-opencv-ssd-v2
+
+on:
+  push:
+    branches:
+      - evidence/probe-opencv-ssd-v2
+    paths:
+      - tests/evidence/opencvSsdProbe.evidence.test.ts
+      - .github/workflows/probe-opencv-ssd-v2.yml
+      - src/detection/modelCandidates.ts
+      - src/detection/onnx/**
+      - package.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned dependencies
+        run: npm install
+
+      - name: Execute evidence probe
+        run: npx vitest run tests/evidence/opencvSsdProbe.evidence.test.ts --reporter=verbose
+
+      - name: Upload verified diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencv-ssd-probe-diagnostic-v2
+          path: artifacts/opencv-ssd-probe.json
+          if-no-files-found: warn
+          retention-days: 30
