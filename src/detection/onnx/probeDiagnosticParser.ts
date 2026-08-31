@@ -3,6 +3,8 @@ import type { CandidateProbeCompatibilityStatus } from './candidateProbeCompatib
 import type { OnnxCandidateProbeDiagnosticRecord } from './probeDiagnostic';
 import type { ProbeMetadataCompleteness } from './probeRecord';
 import type { OnnxValueKind, OnnxValueMetadata } from './runtime';
+import type { OnnxRuntimeSmokeEvidence } from './runtimeSmoke';
+import { validateOnnxRuntimeSmokeEvidence } from './runtimeSmoke';
 
 function objectValue(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -24,6 +26,12 @@ function booleanValue(value: unknown, label: string): boolean {
 function finiteNumber(value: unknown, label: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${label} must be a finite number`);
   return value;
+}
+
+function integerNumber(value: unknown, label: string): number {
+  const number = finiteNumber(value, label);
+  if (!Number.isInteger(number)) throw new Error(`${label} must be an integer`);
+  return number;
 }
 
 function optionalString(value: unknown, label: string): string | undefined {
@@ -52,7 +60,9 @@ function enumValue<T extends string>(
 const VALUE_KINDS: readonly OnnxValueKind[] = ['tensor', 'non_tensor', 'unknown'];
 const BACKENDS: readonly DetectorBackend[] = ['webgpu', 'wasm', 'webnn', 'webgl', 'unknown'];
 const COMPLETENESS: readonly ProbeMetadataCompleteness[] = ['complete', 'partial', 'names_only', 'empty'];
-const COMPATIBILITY: readonly CandidateProbeCompatibilityStatus[] = ['compatible', 'incompatible', 'not_assessed'];
+const COMPATIBILITY: readonly CandidateProbeCompatibilityStatus[] = [
+  'compatible', 'unconfirmed', 'incompatible', 'not_assessed',
+];
 
 function parseShape(value: unknown, label: string): Array<string | number> | undefined {
   if (value === undefined) return undefined;
@@ -62,6 +72,11 @@ function parseShape(value: unknown, label: string): Array<string | number> | und
   return value.map((item, index) => typeof item === 'number'
     ? finiteNumber(item, `${label}[${index}]`)
     : item) as Array<string | number>;
+}
+
+function parseNumericShape(value: unknown, label: string): number[] {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+  return value.map((item, index) => integerNumber(item, `${label}[${index}]`));
 }
 
 function parseMetadataArray(value: unknown, label: string): OnnxValueMetadata[] {
@@ -78,6 +93,36 @@ function parseMetadataArray(value: unknown, label: string): OnnxValueMetadata[] 
     if (shape !== undefined) metadata.shape = shape;
     return metadata;
   });
+}
+
+function parseRuntimeSmoke(value: unknown): OnnxRuntimeSmokeEvidence {
+  const record = objectValue(value, 'probe.runtimeSmoke');
+  if (record.schemaVersion !== '1') throw new Error('probe.runtimeSmoke.schemaVersion must be 1');
+  if (record.attempted !== true) throw new Error('probe.runtimeSmoke.attempted must be true');
+  const input = objectValue(record.input, 'probe.runtimeSmoke.input');
+  if (!Array.isArray(record.outputs)) throw new Error('probe.runtimeSmoke.outputs must be an array');
+  const evidence: OnnxRuntimeSmokeEvidence = {
+    schemaVersion: '1',
+    attempted: true,
+    passed: booleanValue(record.passed, 'probe.runtimeSmoke.passed'),
+    input: {
+      name: stringValue(input.name, 'probe.runtimeSmoke.input.name'),
+      type: stringValue(input.type, 'probe.runtimeSmoke.input.type'),
+      shape: parseNumericShape(input.shape, 'probe.runtimeSmoke.input.shape'),
+    },
+    outputs: record.outputs.map((value, index) => {
+      const output = objectValue(value, `probe.runtimeSmoke.outputs[${index}]`);
+      return {
+        name: stringValue(output.name, `probe.runtimeSmoke.outputs[${index}].name`),
+        type: stringValue(output.type, `probe.runtimeSmoke.outputs[${index}].type`),
+        shape: parseNumericShape(output.shape, `probe.runtimeSmoke.outputs[${index}].shape`),
+        dataLength: integerNumber(output.dataLength, `probe.runtimeSmoke.outputs[${index}].dataLength`),
+      };
+    }),
+    findings: stringArray(record.findings, 'probe.runtimeSmoke.findings'),
+  };
+  validateOnnxRuntimeSmokeEvidence(evidence);
+  return evidence;
 }
 
 function parseProbe(value: unknown): OnnxCandidateProbeDiagnosticRecord['probe'] {
@@ -122,6 +167,7 @@ function parseProbe(value: unknown): OnnxCandidateProbeDiagnosticRecord['probe']
   const fallbackReason = optionalString(record.fallbackReason, 'probe.fallbackReason');
   if (runtimeVersion !== undefined) probe.runtime.runtimeVersion = runtimeVersion;
   if (fallbackReason !== undefined) probe.fallbackReason = fallbackReason;
+  if (record.runtimeSmoke !== undefined) probe.runtimeSmoke = parseRuntimeSmoke(record.runtimeSmoke);
 
   const expectedWidth = hint.expectedWidth === undefined ? undefined : finiteNumber(hint.expectedWidth, 'probe.inputHintAssessment.expectedWidth');
   const expectedHeight = hint.expectedHeight === undefined ? undefined : finiteNumber(hint.expectedHeight, 'probe.inputHintAssessment.expectedHeight');

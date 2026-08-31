@@ -9,6 +9,7 @@ import {
   type OnnxCandidateProbeDiagnosticRecord,
 } from '../../../src/detection/onnx/probeDiagnostic';
 import { buildOnnxProbeRecord } from '../../../src/detection/onnx/probeRecord';
+import type { OnnxRuntimeSmokeEvidence } from '../../../src/detection/onnx/runtimeSmoke';
 import type {
   OnnxExecutionProvider,
   OnnxModelSource,
@@ -36,16 +37,48 @@ function completeProbe(): OnnxModelProbeResult {
   };
 }
 
-function diagnostic(probe: OnnxModelProbeResult = completeProbe()): OnnxCandidateProbeDiagnosticRecord {
+function dynamicProbe(): OnnxModelProbeResult {
+  return {
+    ...completeProbe(),
+    inputs: [{ name: 'image_tensor:0', kind: 'tensor', type: 'uint8', shape: [1, 'unk__241', 'unk__242', 3] }],
+    outputs: [
+      { name: 'detection_boxes:0', kind: 'tensor', type: 'float32', shape: [1, 'unk__243', 4] },
+      { name: 'detection_scores:0', kind: 'tensor', type: 'float32', shape: [1, 'unk__244'] },
+      { name: 'detection_classes:0', kind: 'tensor', type: 'float32', shape: [1, 'unk__244'] },
+      { name: 'num_detections:0', kind: 'tensor', type: 'float32', shape: [1] },
+    ],
+  };
+}
+
+function passingSmoke(): OnnxRuntimeSmokeEvidence {
+  return {
+    schemaVersion: '1', attempted: true, passed: true,
+    input: { name: 'image_tensor:0', type: 'uint8', shape: [1, 300, 300, 3] },
+    outputs: [
+      { name: 'detection_boxes:0', type: 'float32', shape: [1, 100, 4], dataLength: 400 },
+      { name: 'detection_scores:0', type: 'float32', shape: [1, 100], dataLength: 100 },
+      { name: 'detection_classes:0', type: 'float32', shape: [1, 100], dataLength: 100 },
+      { name: 'num_detections:0', type: 'float32', shape: [1], dataLength: 1 },
+    ],
+    findings: [],
+  };
+}
+
+function diagnostic(
+  probe: OnnxModelProbeResult = completeProbe(),
+  smoke?: OnnxRuntimeSmokeEvidence,
+): OnnxCandidateProbeDiagnosticRecord {
   const candidate = OPENCV_SSD_MOBILENET_V2_COCO_2026JUL;
+  const record = buildOnnxProbeRecord(
+    candidate,
+    { sha256: candidate.artifact.sha256, sizeBytes: 4 },
+    probe,
+    new Date('2026-08-31T03:30:00.000Z'),
+  );
+  if (smoke) record.runtimeSmoke = smoke;
   return buildOnnxCandidateProbeDiagnosticRecord(
-    buildOnnxProbeRecord(
-      candidate,
-      { sha256: candidate.artifact.sha256, sizeBytes: 4 },
-      probe,
-      new Date('2026-08-31T03:30:00.000Z'),
-    ),
-    assessCandidateProbeCompatibility(candidate, probe),
+    record,
+    assessCandidateProbeCompatibility(candidate, probe, smoke),
   );
 }
 
@@ -103,6 +136,16 @@ describe('external candidate detector factory', () => {
     expect(factory.sources[0]).toBe(verifiedArtifact.bytes);
     await built.detector.dispose();
     expect(factory.session.releaseCount).toBe(1);
+  });
+
+  it('materializes runtime-observed shapes only after a dynamic diagnostic verifies', () => {
+    const built = buildExternalCandidateDetector(
+      OPENCV_SSD_MOBILENET_V2_COCO_2026JUL,
+      artifact(),
+      diagnostic(dynamicProbe(), passingSmoke()),
+      { ssdRgbResize: () => new Uint8Array(300 * 300 * 3) },
+    );
+    expect(built.probeVerified).toBe(true);
   });
 
   it('rejects an artifact hash that differs from the registered candidate before detector construction', () => {
