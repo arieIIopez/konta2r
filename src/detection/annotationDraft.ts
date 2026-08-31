@@ -4,9 +4,14 @@ import {
   validateGroundTruthObject,
   type AnnotatedBenchmarkFrame,
   type AnnotatedBenchmarkSequence,
+  type BenchmarkFrameSelection,
   type GroundTruthObject,
   type GroundTruthOcclusion,
 } from './benchmarkDataset';
+import {
+  validateTemporalSamplingPlan,
+  type TemporalSamplingPlan,
+} from './temporalSampling';
 
 export const DETECTOR_GROUND_TRUTH_CLASSES = [
   'person',
@@ -23,6 +28,7 @@ export interface AnnotationDraft {
   datasetId: string;
   sequenceId: string;
   frames: AnnotatedBenchmarkFrame[];
+  samplingPlan?: TemporalSamplingPlan;
   nextFrameOrdinal: number;
   nextAnnotationOrdinal: number;
 }
@@ -33,6 +39,7 @@ export interface AddAnnotationFrameInput {
   height: number;
   /** Logical detector timestamp; defaults to mediaTimeMs for this annotation surface. */
   timestampMs?: number;
+  selection?: BenchmarkFrameSelection;
 }
 
 export interface AddGroundTruthObjectInput {
@@ -64,11 +71,20 @@ function cloneObject(object: GroundTruthObject): GroundTruthObject {
   };
 }
 
+function cloneSelection(selection: BenchmarkFrameSelection): BenchmarkFrameSelection {
+  return { ...selection };
+}
+
 function cloneFrame(frame: AnnotatedBenchmarkFrame): AnnotatedBenchmarkFrame {
   return {
     ...frame,
+    ...(frame.selection === undefined ? {} : { selection: cloneSelection(frame.selection) }),
     objects: frame.objects.map(cloneObject),
   };
+}
+
+function cloneSamplingPlan(plan: TemporalSamplingPlan): TemporalSamplingPlan {
+  return { ...plan, plannedMediaTimesMs: [...plan.plannedMediaTimesMs] };
 }
 
 function sortFrames(frames: AnnotatedBenchmarkFrame[]): void {
@@ -94,9 +110,31 @@ export function cloneAnnotationDraft(draft: AnnotationDraft): AnnotationDraft {
     datasetId: draft.datasetId,
     sequenceId: draft.sequenceId,
     frames: draft.frames.map(cloneFrame),
+    ...(draft.samplingPlan === undefined ? {} : { samplingPlan: cloneSamplingPlan(draft.samplingPlan) }),
     nextFrameOrdinal: draft.nextFrameOrdinal,
     nextAnnotationOrdinal: draft.nextAnnotationOrdinal,
   };
+}
+
+export function setAnnotationSamplingPlan(draft: AnnotationDraft, plan: TemporalSamplingPlan | undefined): void {
+  if (plan === undefined) {
+    if (draft.frames.some((frame) => frame.selection?.source === 'planned')) {
+      throw new Error('Cannot remove sampling plan while planned frames remain in the draft');
+    }
+    delete draft.samplingPlan;
+    return;
+  }
+  validateTemporalSamplingPlan(plan);
+  const existingPlannedFrames = draft.frames.filter((frame) => frame.selection?.source === 'planned');
+  for (const frame of existingPlannedFrames) {
+    const index = frame.selection?.planIndex;
+    const requested = frame.selection?.requestedMediaTimeMs;
+    const expected = index === undefined ? undefined : plan.plannedMediaTimesMs[index];
+    if (expected === undefined || requested === undefined || Math.abs(expected - requested) > 1e-9) {
+      throw new Error('New sampling plan is incompatible with already captured planned frames');
+    }
+  }
+  draft.samplingPlan = cloneSamplingPlan(plan);
 }
 
 export function addAnnotationFrame(
@@ -113,12 +151,18 @@ export function addAnnotationFrame(
   if (!Number.isFinite(timestampMs)) throw new Error('timestampMs must be finite');
 
   const duplicate = draft.frames.find((frame) => frame.mediaTimeMs === input.mediaTimeMs);
-  if (duplicate) return duplicate;
+  if (duplicate) {
+    if (input.selection?.source === 'planned' && duplicate.selection?.source !== 'planned') {
+      duplicate.selection = cloneSelection(input.selection);
+    }
+    return duplicate;
+  }
 
   const frame: AnnotatedBenchmarkFrame = {
     frameId: nextId('frame', draft.nextFrameOrdinal),
     timestampMs,
     mediaTimeMs: input.mediaTimeMs,
+    ...(input.selection === undefined ? {} : { selection: cloneSelection(input.selection) }),
     width: input.width,
     height: input.height,
     objects: [],
@@ -178,6 +222,7 @@ export function toAnnotatedBenchmarkSequence(draft: AnnotationDraft): AnnotatedB
     datasetId: nonEmpty(draft.datasetId, 'datasetId'),
     sequenceId: nonEmpty(draft.sequenceId, 'sequenceId'),
     frames: draft.frames.map(cloneFrame),
+    ...(draft.samplingPlan === undefined ? {} : { samplingPlan: cloneSamplingPlan(draft.samplingPlan) }),
     source: {
       note: 'Created locally with Konta2r benchmark annotation surface. Logical timestampMs defaults to mediaTimeMs unless explicitly changed.',
     },
@@ -207,6 +252,7 @@ export function restoreAnnotationDraft(sequence: AnnotatedBenchmarkSequence): An
     datasetId: sequence.datasetId,
     sequenceId: sequence.sequenceId,
     frames: sequence.frames.map(cloneFrame),
+    ...(sequence.samplingPlan === undefined ? {} : { samplingPlan: cloneSamplingPlan(sequence.samplingPlan) }),
     nextFrameOrdinal: positiveInteger(maximumFrameOrdinal + 1, 'nextFrameOrdinal'),
     nextAnnotationOrdinal: positiveInteger(maximumAnnotationOrdinal + 1, 'nextAnnotationOrdinal'),
   };

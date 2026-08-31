@@ -2,9 +2,11 @@ import {
   validateAnnotatedBenchmarkSequence,
   type AnnotatedBenchmarkFrame,
   type AnnotatedBenchmarkSequence,
+  type BenchmarkFrameSelection,
   type GroundTruthObject,
   type GroundTruthOcclusion,
 } from './benchmarkDataset';
+import type { TemporalSamplingPlan } from './temporalSampling';
 
 export type { AnnotatedBenchmarkSequence } from './benchmarkDataset';
 
@@ -29,6 +31,18 @@ function finiteNumber(value: unknown, label: string): number {
   return value;
 }
 
+function nonNegativeInteger(value: unknown, label: string): number {
+  const number = finiteNumber(value, label);
+  if (!Number.isInteger(number) || number < 0) throw new Error(`${label} must be a non-negative integer`);
+  return number;
+}
+
+function positiveInteger(value: unknown, label: string): number {
+  const number = finiteNumber(value, label);
+  if (!Number.isInteger(number) || number < 1) throw new Error(`${label} must be a positive integer`);
+  return number;
+}
+
 function optionalBoolean(value: unknown, label: string): boolean | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'boolean') throw new Error(`${label} must be boolean`);
@@ -46,6 +60,47 @@ function optionalHash(value: unknown, label: string): string | undefined {
   const hash = nonEmptyString(value, label).toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error(`${label} must be a SHA-256 hex digest`);
   return hash;
+}
+
+function parseNumberArray(value: unknown, label: string): number[] {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+  return value.map((item, index) => finiteNumber(item, `${label}[${index}]`));
+}
+
+function parseSamplingPlan(value: unknown): TemporalSamplingPlan {
+  const record = objectValue(value, 'sequence.samplingPlan');
+  if (record.schemaVersion !== '1') throw new Error('sequence.samplingPlan.schemaVersion must be 1');
+  if (record.strategy !== 'stratified_uniform_jitter') {
+    throw new Error('sequence.samplingPlan.strategy is unsupported');
+  }
+  return {
+    schemaVersion: '1',
+    strategy: 'stratified_uniform_jitter',
+    durationMs: finiteNumber(record.durationMs, 'sequence.samplingPlan.durationMs'),
+    sampleCount: positiveInteger(record.sampleCount, 'sequence.samplingPlan.sampleCount'),
+    seed: nonEmptyString(record.seed, 'sequence.samplingPlan.seed'),
+    startMarginMs: finiteNumber(record.startMarginMs, 'sequence.samplingPlan.startMarginMs'),
+    endMarginMs: finiteNumber(record.endMarginMs, 'sequence.samplingPlan.endMarginMs'),
+    jitterFraction: finiteNumber(record.jitterFraction, 'sequence.samplingPlan.jitterFraction'),
+    plannedMediaTimesMs: parseNumberArray(record.plannedMediaTimesMs, 'sequence.samplingPlan.plannedMediaTimesMs'),
+  };
+}
+
+function parseSelection(value: unknown, frameIndex: number): BenchmarkFrameSelection {
+  const label = `frames[${frameIndex}].selection`;
+  const record = objectValue(value, label);
+  if (record.source === 'manual') {
+    if (record.planIndex !== undefined || record.requestedMediaTimeMs !== undefined) {
+      throw new Error(`${label} manual source cannot contain planned fields`);
+    }
+    return { source: 'manual' };
+  }
+  if (record.source !== 'planned') throw new Error(`${label}.source must be planned or manual`);
+  return {
+    source: 'planned',
+    planIndex: nonNegativeInteger(record.planIndex, `${label}.planIndex`),
+    requestedMediaTimeMs: finiteNumber(record.requestedMediaTimeMs, `${label}.requestedMediaTimeMs`),
+  };
 }
 
 function parseObject(value: unknown, frameIndex: number, objectIndex: number): GroundTruthObject {
@@ -83,6 +138,7 @@ function parseFrame(value: unknown, index: number): AnnotatedBenchmarkFrame {
   if (record.mediaTimeMs !== undefined) {
     frame.mediaTimeMs = finiteNumber(record.mediaTimeMs, `${label}.mediaTimeMs`);
   }
+  if (record.selection !== undefined) frame.selection = parseSelection(record.selection, index);
   return frame;
 }
 
@@ -106,6 +162,8 @@ export function parseAnnotatedBenchmarkSequenceJson(text: string): AnnotatedBenc
     sequenceId: nonEmptyString(record.sequenceId, 'sequence.sequenceId'),
     frames: record.frames.map((frame, index) => parseFrame(frame, index)),
   };
+
+  if (record.samplingPlan !== undefined) sequence.samplingPlan = parseSamplingPlan(record.samplingPlan);
 
   if (record.source !== undefined) {
     const source = objectValue(record.source, 'sequence.source');

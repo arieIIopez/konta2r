@@ -1,7 +1,12 @@
 import type { BoundingBox } from '../core/types';
+import {
+  validateTemporalSamplingPlan,
+  type TemporalSamplingPlan,
+} from './temporalSampling';
 
 export type GroundTruthOcclusion = 'none' | 'partial' | 'heavy';
 export type ImageScaleBin = 'tiny' | 'small' | 'medium' | 'large';
+export type BenchmarkFrameSelectionSource = 'planned' | 'manual';
 
 export interface GroundTruthObject {
   annotationId: string;
@@ -12,12 +17,22 @@ export interface GroundTruthObject {
   ignore?: boolean;
 }
 
+export interface BenchmarkFrameSelection {
+  source: BenchmarkFrameSelectionSource;
+  /** Index into sequence.samplingPlan.plannedMediaTimesMs when source=planned. */
+  planIndex?: number;
+  /** Requested seek position from the reproducible plan. Actual presented time remains mediaTimeMs. */
+  requestedMediaTimeMs?: number;
+}
+
 export interface AnnotatedBenchmarkFrame {
   frameId: string;
   /** Logical timestamp carried into DetectorInput and benchmark records. */
   timestampMs: number;
-  /** Optional seek position in the source medium; deliberately distinct from timestampMs. */
+  /** Optional seek position actually presented in the source medium; deliberately distinct from timestampMs. */
   mediaTimeMs?: number;
+  /** Provenance of why this frame entered the corpus. */
+  selection?: BenchmarkFrameSelection;
   width: number;
   height: number;
   objects: GroundTruthObject[];
@@ -28,6 +43,8 @@ export interface AnnotatedBenchmarkSequence {
   datasetId: string;
   sequenceId: string;
   frames: AnnotatedBenchmarkFrame[];
+  /** Optional reproducible sampling proposal. Manual frames may coexist but must remain explicitly labelled. */
+  samplingPlan?: TemporalSamplingPlan;
   source?: {
     mediaSha256?: string;
     annotationSha256?: string;
@@ -53,6 +70,33 @@ export const DEFAULT_IMAGE_SCALE_THRESHOLDS: ImageScaleThresholds = {
 
 function finitePositive(value: number): boolean {
   return Number.isFinite(value) && value > 0;
+}
+
+function validateFrameSelection(
+  frame: AnnotatedBenchmarkFrame,
+  plan: TemporalSamplingPlan | undefined,
+): void {
+  const selection = frame.selection;
+  if (!selection) return;
+  if (selection.source === 'manual') {
+    if (selection.planIndex !== undefined || selection.requestedMediaTimeMs !== undefined) {
+      throw new Error(`Manual frame ${frame.frameId} cannot declare planned-sample fields`);
+    }
+    return;
+  }
+
+  if (!plan) throw new Error(`Planned frame ${frame.frameId} requires sequence.samplingPlan`);
+  if (!Number.isInteger(selection.planIndex) || selection.planIndex === undefined || selection.planIndex < 0) {
+    throw new Error(`Planned frame ${frame.frameId} requires a non-negative planIndex`);
+  }
+  const expected = plan.plannedMediaTimesMs[selection.planIndex];
+  if (expected === undefined) throw new Error(`Planned frame ${frame.frameId} planIndex is outside the sampling plan`);
+  if (selection.requestedMediaTimeMs === undefined || !Number.isFinite(selection.requestedMediaTimeMs)) {
+    throw new Error(`Planned frame ${frame.frameId} requires requestedMediaTimeMs`);
+  }
+  if (Math.abs(selection.requestedMediaTimeMs - expected) > 1e-9) {
+    throw new Error(`Planned frame ${frame.frameId} requestedMediaTimeMs does not match the sampling plan`);
+  }
 }
 
 export function validateGroundTruthObject(
@@ -95,13 +139,25 @@ export function validateAnnotatedBenchmarkSequence(sequence: AnnotatedBenchmarkS
   if (sequence.schemaVersion !== '1') throw new Error('Unsupported benchmark sequence schemaVersion');
   if (sequence.datasetId.trim().length === 0) throw new Error('datasetId is required');
   if (sequence.sequenceId.trim().length === 0) throw new Error('sequenceId is required');
+  if (sequence.samplingPlan) validateTemporalSamplingPlan(sequence.samplingPlan);
+
   const frameIds = new Set<string>();
+  const usedPlanIndices = new Set<number>();
   let previousTimestamp = Number.NEGATIVE_INFINITY;
   let previousMediaTime = Number.NEGATIVE_INFINITY;
   for (const frame of sequence.frames) {
     if (frameIds.has(frame.frameId)) throw new Error(`Duplicate frameId ${frame.frameId}`);
     frameIds.add(frame.frameId);
     validateAnnotatedBenchmarkFrame(frame);
+    validateFrameSelection(frame, sequence.samplingPlan);
+
+    if (frame.selection?.source === 'planned' && frame.selection.planIndex !== undefined) {
+      if (usedPlanIndices.has(frame.selection.planIndex)) {
+        throw new Error(`Sampling plan index ${frame.selection.planIndex} is assigned to more than one frame`);
+      }
+      usedPlanIndices.add(frame.selection.planIndex);
+    }
+
     if (frame.timestampMs < previousTimestamp) {
       throw new Error('Benchmark frame timestamps must be non-decreasing');
     }
