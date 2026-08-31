@@ -1,5 +1,5 @@
-import type { EntityType } from '../core/types';
-import type { SpatialTrackSample } from './types';
+import type { EntityType } from '../core/types.ts';
+import type { SpatialTrackSample } from './types.ts';
 
 export interface PublicAggregationOptions {
   bucketMs?: number;
