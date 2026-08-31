@@ -14,7 +14,10 @@ export interface GroundTruthObject {
 
 export interface AnnotatedBenchmarkFrame {
   frameId: string;
+  /** Logical timestamp carried into DetectorInput and benchmark records. */
   timestampMs: number;
+  /** Optional seek position in the source medium; deliberately distinct from timestampMs. */
+  mediaTimeMs?: number;
   width: number;
   height: number;
   objects: GroundTruthObject[];
@@ -74,6 +77,9 @@ export function validateAnnotatedBenchmarkFrame(frame: AnnotatedBenchmarkFrame):
     throw new Error(`Frame ${frame.frameId} dimensions must be greater than zero`);
   }
   if (!Number.isFinite(frame.timestampMs)) throw new Error(`Frame ${frame.frameId} timestamp must be finite`);
+  if (frame.mediaTimeMs !== undefined && (!Number.isFinite(frame.mediaTimeMs) || frame.mediaTimeMs < 0)) {
+    throw new Error(`Frame ${frame.frameId} mediaTimeMs must be finite and non-negative`);
+  }
 
   const ids = new Set<string>();
   for (const object of frame.objects) {
@@ -91,6 +97,7 @@ export function validateAnnotatedBenchmarkSequence(sequence: AnnotatedBenchmarkS
   if (sequence.sequenceId.trim().length === 0) throw new Error('sequenceId is required');
   const frameIds = new Set<string>();
   let previousTimestamp = Number.NEGATIVE_INFINITY;
+  let previousMediaTime = Number.NEGATIVE_INFINITY;
   for (const frame of sequence.frames) {
     if (frameIds.has(frame.frameId)) throw new Error(`Duplicate frameId ${frame.frameId}`);
     frameIds.add(frame.frameId);
@@ -99,6 +106,13 @@ export function validateAnnotatedBenchmarkSequence(sequence: AnnotatedBenchmarkS
       throw new Error('Benchmark frame timestamps must be non-decreasing');
     }
     previousTimestamp = frame.timestampMs;
+
+    if (frame.mediaTimeMs !== undefined) {
+      if (frame.mediaTimeMs < previousMediaTime) {
+        throw new Error('Benchmark frame mediaTimeMs values must be non-decreasing when provided');
+      }
+      previousMediaTime = frame.mediaTimeMs;
+    }
   }
 }
 
