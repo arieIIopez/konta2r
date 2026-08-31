@@ -23,6 +23,24 @@ describe('ONNX model artifact verification', () => {
     expect([...result.bytes]).toEqual([...bytes]);
   });
 
+  it('passes the downloaded ArrayBuffer directly to the digest boundary', async () => {
+    const sourceBuffer = new ArrayBuffer(4);
+    new Uint8Array(sourceBuffer).set([1, 2, 3, 4]);
+    let received: ArrayBuffer | null = null;
+
+    const result = await fetchVerifiedOnnxArtifact('https://example.test/model.onnx', ABC_SHA256, {
+      fetcher: async () => new Response(sourceBuffer, { status: 200 }),
+      digest: async (buffer) => {
+        received = buffer;
+        return ABC_SHA256;
+      },
+    });
+
+    expect(received).toBeInstanceOf(ArrayBuffer);
+    expect(received?.byteLength).toBe(4);
+    expect(result.sizeBytes).toBe(4);
+  });
+
   it('rejects a model whose bytes do not match the registered checkpoint hash', async () => {
     const bytes = new TextEncoder().encode('tampered');
     await expect(fetchVerifiedOnnxArtifact('https://example.test/model.onnx', ABC_SHA256, {
