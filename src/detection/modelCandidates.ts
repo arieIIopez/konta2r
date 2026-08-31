@@ -71,24 +71,24 @@ export const KALRAY_SSD_MOBILENET_V2_COCO: DetectorCandidateRecord = {
 };
 
 /**
- * Independent 2026 ONNX conversion of the same TensorFlow frozen graph. Unlike
- * the Kalray artifact, this source documents exact tensor names, uint8/NHWC
- * preprocessing, a runnable ONNX Runtime demo and the ONNX file SHA-256. It is
- * still probe_pending until Konta2r observes the artifact with its own runtime.
+ * Independent 2026 ONNX conversion of the same TensorFlow frozen graph. Konta2r
+ * has now verified the exact checkpoint hash and executed its uint8/NHWC SSD
+ * contract with ONNX Runtime Web/WASM. This is technical probe verification,
+ * not detector selection, benchmark validation or redistribution approval.
  */
 export const OPENCV_SSD_MOBILENET_V2_COCO_2026JUL: DetectorCandidateRecord = {
   id: 'opencv-ssd-mobilenet-v2-coco-2026jul',
   displayName: 'SSD MobileNet V2 COCO — OpenCV contribution 2026-07',
   architecture: 'SSD MobileNet V2',
   role: 'legacy_baseline',
-  status: 'probe_pending',
+  status: 'probe_verified',
   dataset: 'COCO',
   codecId: 'ssd_tf_object_detection',
   inputHint: {
     width: 300,
     height: 300,
     layout: 'NHWC',
-    evidence: 'Source README and conversion script document raw RGB uint8 image_tensor:0 [1,300,300,3].',
+    evidence: 'Source documentation plus Konta2r runtime smoke confirm raw RGB uint8 image_tensor:0 [1,300,300,3].',
   },
   artifact: {
     url: 'https://huggingface.co/opencv/opencv_contribution/resolve/main/ssd_mobilenet_v2_coco_2018_03_29/ssd_mobilenet_v2_coco_2018_03_29_2026jul.onnx',
@@ -99,9 +99,10 @@ export const OPENCV_SSD_MOBILENET_V2_COCO_2026JUL: DetectorCandidateRecord = {
   },
   sourceRepository: 'https://huggingface.co/opencv/opencv_contribution/tree/main/ssd_mobilenet_v2_coco_2018_03_29',
   notes: [
-    'The source documents image_tensor:0 and the four TensorFlow Object Detection API outputs explicitly.',
-    'The repository includes an ONNX Runtime demo and records the original TensorFlow weights source.',
-    'Treat as an independent candidate; do not infer binary equivalence with the Kalray conversion.',
+    'Technical probe verified on 2026-08-31: exact SHA-256 matched and ONNX Runtime Web/WASM executed uint8 [1,300,300,3].',
+    'Runtime smoke produced boxes [1,100,4], scores [1,100], classes [1,100] and num_detections [1].',
+    'Primary graph metadata remains symbolic; runtime smoke evidence is stored separately under docs/benchmarks/evidence.',
+    'Probe verification does not imply accuracy acceptance, production selection or permission to redistribute weights.',
     'Do not bundle from Konta2r while redistributionVerified=false.',
   ],
   evidenceUrls: [
@@ -109,6 +110,7 @@ export const OPENCV_SSD_MOBILENET_V2_COCO_2026JUL: DetectorCandidateRecord = {
     'https://huggingface.co/opencv/opencv_contribution/blob/main/ssd_mobilenet_v2_coco_2018_03_29/README.md',
     'https://huggingface.co/opencv/opencv_contribution/blob/main/ssd_mobilenet_v2_coco_2018_03_29/convert_to_onnx.py',
     'https://huggingface.co/opencv/opencv_contribution/blob/main/ssd_mobilenet_v2_coco_2018_03_29/ssd_mobilenet_v2_coco_2018_03_29_2026jul.onnx',
+    'https://github.com/arieIIopez/konta2r/blob/develop/docs/benchmarks/evidence/opencv-ssd-mobilenet-v2-coco-2026jul-probe.json',
   ],
 };
 
