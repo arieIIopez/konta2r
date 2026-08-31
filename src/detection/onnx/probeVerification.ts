@@ -13,6 +13,7 @@ export interface ProbeVerificationFinding {
     | 'artifact_hash_mismatch'
     | 'metadata_incomplete'
     | 'codec_not_assessed'
+    | 'codec_unconfirmed'
     | 'codec_incompatible'
     | 'stored_assessment_mismatch'
     | 'input_hint_not_confirmed';
@@ -55,13 +56,32 @@ function sameStringArrays(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
+function runtimeSmokeConfirmsInputHint(
+  candidate: DetectorCandidateRecord,
+  diagnostic: OnnxCandidateProbeDiagnosticRecord,
+): boolean {
+  const hint = candidate.inputHint;
+  const smoke = diagnostic.probe.runtimeSmoke;
+  if (!hint || !smoke?.passed) return false;
+  const shape = smoke.input.shape;
+  if (hint.layout === 'NHWC') {
+    return shape.length === 4
+      && shape[0] === 1
+      && shape[1] === hint.height
+      && shape[2] === hint.width
+      && shape[3] === 3;
+  }
+  return shape.includes(hint.width) && shape.includes(hint.height);
+}
+
 /**
  * Verifies whether a saved diagnostic is sufficient technical evidence to
  * propose changing a candidate from probe_pending to probe_verified.
  *
  * The derived codec assessment stored in the JSON is never trusted directly:
- * compatibility is recomputed from the primary IO metadata in the probe.
- * License eligibility and detector accuracy are deliberately out of scope.
+ * compatibility is recomputed from primary IO metadata plus optional executed
+ * runtime smoke evidence. License eligibility and detector accuracy remain out
+ * of scope.
  */
 export function verifyCandidateProbeDiagnostic(
   candidate: DetectorCandidateRecord,
@@ -105,12 +125,22 @@ export function verifyCandidateProbeDiagnostic(
     });
   }
 
-  const recomputed = assessCandidateProbeCompatibility(candidate, probeFromDiagnostic(diagnostic));
+  const recomputed = assessCandidateProbeCompatibility(
+    candidate,
+    probeFromDiagnostic(diagnostic),
+    record.runtimeSmoke,
+  );
   if (recomputed.status === 'not_assessed') {
     findings.push({
       code: 'codec_not_assessed',
       severity: 'warning',
       message: 'No registered codec contract can assess this candidate yet.',
+    });
+  } else if (recomputed.status === 'unconfirmed') {
+    findings.push({
+      code: 'codec_unconfirmed',
+      severity: 'warning',
+      message: 'The observed codec metadata is plausible but symbolic dimensions require executed runtime smoke evidence.',
     });
   } else if (recomputed.status === 'incompatible') {
     findings.push({
@@ -132,15 +162,19 @@ export function verifyCandidateProbeDiagnostic(
     findings.push({
       code: 'stored_assessment_mismatch',
       severity: 'error',
-      message: 'Stored codec assessment does not match the assessment recomputed from primary probe metadata.',
+      message: 'Stored codec assessment does not match the assessment recomputed from primary probe evidence.',
     });
   }
 
-  if (candidate.inputHint && record.inputHintAssessment.dimensionsMatch !== true) {
+  if (
+    candidate.inputHint
+    && record.inputHintAssessment.dimensionsMatch !== true
+    && !runtimeSmokeConfirmsInputHint(candidate, diagnostic)
+  ) {
     findings.push({
       code: 'input_hint_not_confirmed',
       severity: 'warning',
-      message: 'Observed input metadata does not positively confirm the registered input-dimension hint.',
+      message: 'Neither static input metadata nor executed runtime evidence positively confirms the registered input-dimension hint.',
     });
   }
 
