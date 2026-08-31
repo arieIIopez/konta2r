@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { CorpusSplit } from '../../src/detection/corpusManifest';
 import type { DetectorBenchmarkReport } from '../../src/detection/benchmarkReport';
 import { assessDetectorBenchmarkValidity } from '../../src/detection/benchmarkValidity';
 
@@ -6,6 +7,8 @@ function report(overrides: {
   modelHash?: string;
   annotationHash?: string;
   mediaHash?: string;
+  manifestSplit?: CorpusSplit;
+  manifestHash?: string;
   timed?: boolean;
   actualTimes?: readonly (number | undefined)[];
   frameCount?: number;
@@ -39,6 +42,15 @@ function report(overrides: {
       frameCount,
       ...(overrides.annotationHash === undefined ? {} : { annotationSha256: overrides.annotationHash }),
       ...(overrides.mediaHash === undefined ? {} : { mediaSha256: overrides.mediaHash }),
+      ...(overrides.manifestSplit === undefined
+        ? {}
+        : {
+            manifest: {
+              corpusId: 'pilot-manifest',
+              sha256: overrides.manifestHash ?? SHA_D,
+              split: overrides.manifestSplit,
+            },
+          }),
     },
     device: { label: 'phone' },
     benchmark: {
@@ -101,29 +113,59 @@ function report(overrides: {
 const SHA_A = 'a'.repeat(64);
 const SHA_B = 'b'.repeat(64);
 const SHA_C = 'c'.repeat(64);
+const SHA_D = 'd'.repeat(64);
+
+function complete(split: CorpusSplit): DetectorBenchmarkReport {
+  return report({
+    modelHash: SHA_A,
+    annotationHash: SHA_B,
+    mediaHash: SHA_C,
+    manifestSplit: split,
+    manifestHash: SHA_D,
+  });
+}
 
 describe('benchmark validity gate', () => {
-  it('accepts a fully identified timed run for selection', () => {
-    const assessment = assessDetectorBenchmarkValidity(report({
-      modelHash: SHA_A,
-      annotationHash: SHA_B,
-      mediaHash: SHA_C,
-    }));
-
+  it('accepts a validation-linked timed run for model selection', () => {
+    const assessment = assessDetectorBenchmarkValidity(complete('validation'));
     expect(assessment.status).toBe('valid');
     expect(assessment.profile).toBe('selection');
     expect(assessment.findings).toEqual([]);
     expect(assessment.presentedFrameCoverage).toBe(1);
   });
 
+  it('rejects selection without a frozen manifest link', () => {
+    const assessment = assessDetectorBenchmarkValidity(report({
+      modelHash: SHA_A, annotationHash: SHA_B, mediaHash: SHA_C,
+    }));
+    expect(assessment.status).toBe('invalid');
+    expect(assessment.findings).toContainEqual(expect.objectContaining({ code: 'manifest_link_missing', severity: 'error' }));
+  });
+
+  it('rejects held-out evidence when the profile is model selection', () => {
+    const assessment = assessDetectorBenchmarkValidity(complete('held_out_test'), { profile: 'selection' });
+    expect(assessment.status).toBe('invalid');
+    expect(assessment.findings).toContainEqual(expect.objectContaining({ code: 'selection_split_mismatch' }));
+  });
+
+  it('accepts held-out only under final_evaluation and rejects validation there', () => {
+    const heldOut = assessDetectorBenchmarkValidity(complete('held_out_test'), { profile: 'final_evaluation' });
+    expect(heldOut.status).toBe('valid');
+    expect(heldOut.profile).toBe('final_evaluation');
+
+    const validation = assessDetectorBenchmarkValidity(complete('validation'), { profile: 'final_evaluation' });
+    expect(validation.status).toBe('invalid');
+    expect(validation.findings).toContainEqual(expect.objectContaining({ code: 'final_evaluation_split_mismatch' }));
+  });
+
   it('marks missing identity/evidence as invalid for model selection', () => {
     const assessment = assessDetectorBenchmarkValidity(report({ actualTimes: [500, undefined] }));
-
     expect(assessment.status).toBe('invalid');
     expect(assessment.findings.map((item) => item.code)).toEqual(expect.arrayContaining([
       'model_hash_missing',
       'annotation_hash_missing',
       'media_hash_missing',
+      'manifest_link_missing',
       'presented_frame_coverage_incomplete',
     ]));
     expect(assessment.presentedFrameCoverage).toBe(0.5);
@@ -134,7 +176,6 @@ describe('benchmark validity gate', () => {
       report({ actualTimes: [500, undefined] }),
       { profile: 'development' },
     );
-
     expect(assessment.status).toBe('provisional');
     expect(assessment.findings.every((item) => item.severity === 'warning')).toBe(true);
   });
@@ -149,7 +190,6 @@ describe('benchmark validity gate', () => {
       }),
       { profile: 'development', maxSeekErrorMs: 50 },
     );
-
     expect(assessment.status).toBe('invalid');
     expect(assessment.maxObservedSeekErrorMs).toBe(80);
     expect(assessment.findings).toContainEqual(expect.objectContaining({
@@ -158,16 +198,16 @@ describe('benchmark validity gate', () => {
     }));
   });
 
-  it('does not require a media hash or presented timing for image-only corpora', () => {
+  it('does not require media timing evidence for image-only development corpora', () => {
     const assessment = assessDetectorBenchmarkValidity(report({
       timed: false,
       modelHash: SHA_A,
       annotationHash: SHA_B,
-    }));
-
-    expect(assessment.status).toBe('valid');
+    }), { profile: 'development' });
+    expect(assessment.status).toBe('provisional');
     expect(assessment.timedFrameCount).toBe(0);
     expect(assessment.presentedFrameCoverage).toBeNull();
+    expect(assessment.findings.map((item) => item.code)).toEqual(['manifest_link_missing']);
   });
 
   it('always invalidates an empty benchmark', () => {
@@ -177,7 +217,6 @@ describe('benchmark validity gate', () => {
       annotationHash: SHA_B,
       frameCount: 0,
     }), { profile: 'development' });
-
     expect(assessment.status).toBe('invalid');
     expect(assessment.findings).toContainEqual(expect.objectContaining({ code: 'empty_benchmark' }));
   });
