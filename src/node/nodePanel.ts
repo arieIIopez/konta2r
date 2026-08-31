@@ -46,6 +46,7 @@ export class NodePanel {
           <div class="node-runtime-status">
             <div class="runtime-stat"><span>Perfil</span><strong data-profile>—</strong><small data-profile-detail>—</small></div>
             <div class="runtime-stat"><span>Cámara</span><strong data-camera>—</strong><small data-camera-detail>—</small></div>
+            <div class="runtime-stat"><span>Carga</span><strong data-load>—</strong><small data-load-detail>—</small></div>
             <div class="runtime-stat"><span>Wake lock</span><strong data-wake>—</strong><small data-wake-detail>—</small></div>
             <div class="runtime-stat"><span>Storage</span><strong data-storage>—</strong><small data-storage-detail>—</small></div>
             <div class="runtime-stat"><span>Red</span><strong data-network>—</strong><small>la cola local puede seguir acumulando agregados</small></div>
@@ -107,6 +108,15 @@ export class NodePanel {
     setText(root, '[data-camera-detail]', snapshot.camera.active
       ? `${snapshot.camera.width ?? '—'}×${snapshot.camera.height ?? '—'}${snapshot.camera.frameRate ? ` · ${snapshot.camera.frameRate.toFixed(0)} fps` : ''}`
       : 'sin captura');
+
+    if (snapshot.health.sampleCount === 0) {
+      setText(root, '[data-load]', 'sin muestras');
+      setText(root, '[data-load-detail]', 'se activará con el loop de inferencia ONNX');
+    } else {
+      setText(root, '[data-load]', snapshot.health.loadPressure);
+      setText(root, '[data-load-detail]', `${snapshot.health.observedFps.toFixed(1)} Hz · p95 ${snapshot.health.processingLatencyP95Ms.toFixed(0)} ms · drops ${(snapshot.health.droppedFrameRatio * 100).toFixed(0)}%`);
+    }
+
     setText(root, '[data-wake]', snapshot.wakeLock.active ? 'activo' : snapshot.wakeLock.supported ? 'inactivo' : 'no disponible');
     setText(root, '[data-wake-detail]', snapshot.wakeLock.supported ? 'se solicita al iniciar' : 'el navegador no expone la API');
     setText(root, '[data-storage]', snapshot.storage?.persistent ? 'persistente' : 'evictable');
