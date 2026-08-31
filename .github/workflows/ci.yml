@@ -17,11 +17,21 @@ jobs:
         with:
           node-version: 22
 
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.5
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Edge Functions typecheck
+        run: |
+          deno check --config supabase/functions/deno.json supabase/functions/node-enroll/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/ingest-community/index.ts
 
       - name: Unit tests
         run: npm test
