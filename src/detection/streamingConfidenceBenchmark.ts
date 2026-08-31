@@ -65,19 +65,19 @@ export async function runStreamingAnnotatedBenchmarkWithConfidenceSweep(
   validateAnnotatedBenchmarkSequence(sequence);
   const operatingThreshold = confidenceThreshold(options.operatingConfidenceThreshold);
   const disposeAfterRun = options.disposeDetectorAfterRun ?? true;
+  const sweep = new ConfidenceSweepAccumulator({
+    ...(options.sweepThresholds === undefined ? {} : { thresholds: options.sweepThresholds }),
+    ...(options.iouThreshold === undefined ? {} : { iouThreshold: options.iouThreshold }),
+  });
+  if (sweep.minimumThreshold() > operatingThreshold) {
+    throw new Error('confidence sweep minimum threshold cannot exceed the operating threshold');
+  }
+
   const initialization = await detector.initialize();
   const primary = new AnnotatedBenchmarkAccumulator(initialization, {
     ...(options.iouThreshold === undefined ? {} : { iouThreshold: options.iouThreshold }),
     ...(options.imageScaleThresholds === undefined ? {} : { imageScaleThresholds: options.imageScaleThresholds }),
   });
-  const sweep = new ConfidenceSweepAccumulator({
-    ...(options.sweepThresholds === undefined ? {} : { thresholds: options.sweepThresholds }),
-    ...(options.iouThreshold === undefined ? {} : { iouThreshold: options.iouThreshold }),
-  });
-
-  if (sweep.minimumThreshold() > operatingThreshold) {
-    throw new Error('confidence sweep minimum threshold cannot exceed the operating threshold');
-  }
 
   try {
     let completedFrames = 0;
