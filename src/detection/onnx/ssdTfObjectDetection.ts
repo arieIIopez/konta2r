@@ -229,6 +229,10 @@ function finiteBoxCoordinates(values: readonly number[]): boolean {
   return values.every(Number.isFinite);
 }
 
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
 export interface SsdTfObjectDetectionCodecOptions {
   contract?: SsdTfObjectDetectionContract;
   classMap?: Readonly<Record<number, string>>;
@@ -243,18 +247,37 @@ export interface SsdTfFrameContext {
 /**
  * Codec for TensorFlow Object Detection API SSD exports whose ONNX graph emits
  * normalized [ymin,xmin,ymax,xmax] boxes, scores, 1-based class ids and a
- * num_detections scalar. Use assertSsdTfProbeCompatible() before activating a
- * concrete external checkpoint.
+ * num_detections scalar.
+ *
+ * Construction is gated by an observed OnnxModelProbeResult. This prevents a
+ * documented family contract from being silently applied to an unprobed file.
  */
 export class SsdTfObjectDetectionCodec implements OnnxDetectorCodec<SsdTfFrameContext> {
   private readonly contract: SsdTfObjectDetectionContract;
   private readonly classMap: Readonly<Record<number, string>>;
   private readonly resizeRgb: SsdTfRgbResize;
 
-  constructor(options: SsdTfObjectDetectionCodecOptions = {}) {
-    this.contract = options.contract ?? DOCUMENTED_SSD_MOBILENET_V2_COCO_2018_CONTRACT;
-    this.classMap = options.classMap ?? SSD_TF_MOBILITY_COCO_CLASS_MAP;
-    this.resizeRgb = options.resizeRgb ?? createDefaultRgbResizer();
+  private constructor(
+    contract: SsdTfObjectDetectionContract,
+    classMap: Readonly<Record<number, string>>,
+    resizeRgb: SsdTfRgbResize,
+  ) {
+    this.contract = contract;
+    this.classMap = classMap;
+    this.resizeRgb = resizeRgb;
+  }
+
+  static fromProbe(
+    probe: OnnxModelProbeResult,
+    options: SsdTfObjectDetectionCodecOptions = {},
+  ): SsdTfObjectDetectionCodec {
+    const contract = options.contract ?? DOCUMENTED_SSD_MOBILENET_V2_COCO_2018_CONTRACT;
+    assertSsdTfProbeCompatible(probe, contract);
+    return new SsdTfObjectDetectionCodec(
+      contract,
+      options.classMap ?? SSD_TF_MOBILITY_COCO_CLASS_MAP,
+      options.resizeRgb ?? createDefaultRgbResizer(),
+    );
   }
 
   async prepare(input: DetectorInput): Promise<OnnxPreparedInput<SsdTfFrameContext>> {
@@ -304,10 +327,10 @@ export class SsdTfObjectDetectionCodec implements OnnxDetectorCodec<SsdTfFrameCo
       if (!className || !Number.isFinite(score)) continue;
 
       const offset = index * 4;
-      const ymin = numericAt(boxes, offset);
-      const xmin = numericAt(boxes, offset + 1);
-      const ymax = numericAt(boxes, offset + 2);
-      const xmax = numericAt(boxes, offset + 3);
+      const ymin = clamp01(numericAt(boxes, offset));
+      const xmin = clamp01(numericAt(boxes, offset + 1));
+      const ymax = clamp01(numericAt(boxes, offset + 2));
+      const xmax = clamp01(numericAt(boxes, offset + 3));
       if (!finiteBoxCoordinates([ymin, xmin, ymax, xmax])) continue;
 
       const x = xmin * context.sourceWidth;
