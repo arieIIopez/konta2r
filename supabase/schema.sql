@@ -107,15 +107,15 @@ create table if not exists private.node_lifecycle_events (
   actor_user_id uuid not null,
   action text not null,
   previous_status text not null,
-  resulting_status text not null,
+  next_status text not null,
   credential_key_version smallint,
   created_at timestamptz not null default now(),
   constraint node_lifecycle_action check (action in ('activate', 'pause', 'revoke', 'rotate')),
   constraint node_lifecycle_previous_status check (
     previous_status in ('provisioning', 'active', 'paused', 'revoked')
   ),
-  constraint node_lifecycle_resulting_status check (
-    resulting_status in ('provisioning', 'active', 'paused', 'revoked')
+  constraint node_lifecycle_next_status check (
+    next_status in ('provisioning', 'active', 'paused', 'revoked')
   ),
   constraint node_lifecycle_key_version check (
     credential_key_version is null or credential_key_version > 0
