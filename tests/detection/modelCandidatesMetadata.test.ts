@@ -5,17 +5,17 @@ import {
 } from '../../src/detection/modelCandidates';
 
 describe('detector candidate metadata', () => {
-  it('registers NanoDet as a probe-pending eco candidate with exact LFS identity', () => {
+  it('registers NanoDet as a probe-verified eco candidate with exact LFS identity', () => {
     expect(OPENCV_NANODET_M_PLUS_1_5X_416).toMatchObject({
       role: 'eco_candidate',
-      status: 'probe_pending',
+      status: 'probe_verified',
+      codecId: 'nanodet_plus_gfl',
       inputHint: { width: 416, height: 416, layout: 'NCHW' },
       artifact: {
         sha256: '4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186',
         redistributionVerified: false,
       },
     });
-    expect('codecId' in OPENCV_NANODET_M_PLUS_1_5X_416).toBe(false);
     expect(OPENCV_NANODET_M_PLUS_1_5X_416.artifact.approximateSizeMb).toBeLessThan(4);
   });
 
