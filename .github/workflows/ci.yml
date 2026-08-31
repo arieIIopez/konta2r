@@ -31,6 +31,7 @@ jobs:
       - name: Edge Functions typecheck
         run: |
           deno check --config supabase/functions/deno.json supabase/functions/node-enroll/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/node-lifecycle/index.ts
           deno check --config supabase/functions/deno.json supabase/functions/ingest-community/index.ts
 
       - name: Unit tests
