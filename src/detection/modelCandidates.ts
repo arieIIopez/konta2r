@@ -1,5 +1,6 @@
 export type DetectorCandidateStatus = 'probe_pending' | 'probe_verified' | 'benchmarking' | 'rejected';
 export type DetectorCandidateRole = 'legacy_baseline' | 'eco_candidate' | 'balanced_candidate' | 'performance_candidate';
+export type DetectorCandidateCodecId = 'ssd_tf_object_detection';
 
 export interface ExternalModelArtifact {
   url: string;
@@ -16,6 +17,7 @@ export interface DetectorCandidateRecord {
   role: DetectorCandidateRole;
   status: DetectorCandidateStatus;
   dataset: string;
+  codecId?: DetectorCandidateCodecId;
   inputHint?: {
     width: number;
     height: number;
@@ -41,6 +43,7 @@ export const KALRAY_SSD_MOBILENET_V2_COCO: DetectorCandidateRecord = {
   role: 'legacy_baseline',
   status: 'probe_pending',
   dataset: 'COCO',
+  codecId: 'ssd_tf_object_detection',
   inputHint: {
     width: 300,
     height: 300,
@@ -80,6 +83,7 @@ export const OPENCV_SSD_MOBILENET_V2_COCO_2026JUL: DetectorCandidateRecord = {
   role: 'legacy_baseline',
   status: 'probe_pending',
   dataset: 'COCO',
+  codecId: 'ssd_tf_object_detection',
   inputHint: {
     width: 300,
     height: 300,

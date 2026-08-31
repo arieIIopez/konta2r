@@ -91,6 +91,29 @@
 .probe-back { color: #99f6e4; font-size: .75rem; text-decoration: none; white-space: nowrap; }
 .probe-back:hover { text-decoration: underline; }
 .probe-card { padding: 0 12px 16px; }
+.probe-candidate-field {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  color: #94a3b8;
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.probe-candidate-field select {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 13px;
+  border: 1px solid rgba(94, 234, 212, .2);
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0 36px 0 12px;
+  font: inherit;
+  font-size: .8rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.probe-candidate-field select:disabled { opacity: .55; }
 .probe-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -106,6 +129,21 @@
 }
 .probe-facts dt { color: #94a3b8; font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; }
 .probe-facts dd { margin: 4px 0 0; font-size: .78rem; overflow-wrap: anywhere; }
+.probe-compatibility {
+  display: grid;
+  gap: 5px;
+  margin: 0 12px 12px;
+  padding: 11px 12px;
+  border-radius: 13px;
+  color: #dbeafe;
+  background: rgba(30, 64, 175, .14);
+  border: 1px solid rgba(96, 165, 250, .2);
+  font-size: .72rem;
+  overflow-wrap: anywhere;
+}
+.probe-compatibility strong { color: #bfdbfe; text-transform: uppercase; letter-spacing: .04em; }
+.probe-compatibility span { color: #94a3b8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.probe-compatibility p { margin: 2px 0 0; line-height: 1.45; }
 .probe-progress {
   margin: 0 12px 12px;
   padding: 10px 12px;
