@@ -63,6 +63,7 @@ export class NodeRuntimeController {
       online: navigator.onLine,
       secureContext: window.isSecureContext,
     };
+    this.camera.onUnexpectedEnd(() => void this.handleUnexpectedCameraEnd());
     window.addEventListener('online', this.connectivityHandler);
     window.addEventListener('offline', this.connectivityHandler);
     document.addEventListener('visibilitychange', this.visibilityHandler);
@@ -185,6 +186,7 @@ export class NodeRuntimeController {
     window.removeEventListener('online', this.connectivityHandler);
     window.removeEventListener('offline', this.connectivityHandler);
     document.removeEventListener('visibilitychange', this.visibilityHandler);
+    this.camera.onUnexpectedEnd(null);
     void this.camera.stop();
     this.wakeLock.destroy();
     this.listeners.clear();
@@ -206,6 +208,20 @@ export class NodeRuntimeController {
     this.state.continuity = this.continuityMonitor.snapshot(now);
     this.emit();
   };
+
+  private async handleUnexpectedCameraEnd(): Promise<void> {
+    if (!this.state.running) return;
+    const now = performance.now();
+    this.continuityMonitor.pause('camera_ended', now);
+    this.state.continuity = this.continuityMonitor.snapshot(now);
+    this.state.camera = { active: false };
+    this.state.wakeLock = await this.wakeLock.disable();
+    this.patch({
+      running: false,
+      busy: false,
+      error: 'camera_stream_ended',
+    });
+  }
 
   private clearError(): void {
     if ('error' in this.state) delete this.state.error;
