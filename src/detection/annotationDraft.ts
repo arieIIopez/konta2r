@@ -71,8 +71,8 @@ function cloneObject(object: GroundTruthObject): GroundTruthObject {
   };
 }
 
-function cloneSelection(selection: BenchmarkFrameSelection | undefined): BenchmarkFrameSelection | undefined {
-  return selection ? { ...selection } : undefined;
+function cloneSelection(selection: BenchmarkFrameSelection): BenchmarkFrameSelection {
+  return { ...selection };
 }
 
 function cloneFrame(frame: AnnotatedBenchmarkFrame): AnnotatedBenchmarkFrame {
@@ -83,8 +83,8 @@ function cloneFrame(frame: AnnotatedBenchmarkFrame): AnnotatedBenchmarkFrame {
   };
 }
 
-function cloneSamplingPlan(plan: TemporalSamplingPlan | undefined): TemporalSamplingPlan | undefined {
-  return plan ? { ...plan, plannedMediaTimesMs: [...plan.plannedMediaTimesMs] } : undefined;
+function cloneSamplingPlan(plan: TemporalSamplingPlan): TemporalSamplingPlan {
+  return { ...plan, plannedMediaTimesMs: [...plan.plannedMediaTimesMs] };
 }
 
 function sortFrames(frames: AnnotatedBenchmarkFrame[]): void {
