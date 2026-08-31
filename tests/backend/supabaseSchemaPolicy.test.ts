@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import schemaSql from '../../supabase/schema.sql?raw';
 
 describe('Supabase schema privacy policy', () => {
-  it('keeps node credentials and Community ingest outside the exposed schema', () => {
+  it('keeps node credentials, lifecycle audit and Community ingest outside the exposed schema', () => {
     expect(schemaSql).toContain('create schema if not exists private');
     expect(schemaSql).toContain('create table if not exists private.node_credentials');
+    expect(schemaSql).toContain('create table if not exists private.node_lifecycle_events');
     expect(schemaSql).toContain('create table if not exists private.community_batches');
     expect(schemaSql).toContain('create table if not exists private.flow_aggregates');
     expect(schemaSql).toContain('revoke all on all tables in schema private from public, anon, authenticated');
@@ -25,6 +26,14 @@ describe('Supabase schema privacy policy', () => {
     expect(schemaSql).not.toContain('nodes_insert_own');
     expect(schemaSql).not.toContain('nodes_update_own');
     expect(schemaSql).toContain("(status = 'revoked') = (revoked_at is not null)");
+  });
+
+  it('records lifecycle audit evidence without persisting raw credential material', () => {
+    expect(schemaSql).toContain("action in ('activate', 'pause', 'revoke', 'rotate')");
+    expect(schemaSql).toContain('previous_status text not null');
+    expect(schemaSql).toContain('next_status text not null');
+    expect(schemaSql).toContain('credential_key_version smallint');
+    expect(schemaSql).not.toMatch(/raw_(credential|token)|credential_secret|node_secret/i);
   });
 
   it('stores only a HMAC fingerprint for node credentials', () => {
