@@ -172,7 +172,7 @@ export class AnnotationPanel {
               <button class="action secondary" data-next-frame type="button" ${activeIndex >= 0 && activeIndex < this.draft.frames.length - 1 ? '' : 'disabled'}>Frame siguiente →</button>
               <button class="action secondary" data-remove-frame type="button" ${frame ? '' : 'disabled'}>Eliminar frame</button>
             </div>
-            <p class="runtime-note">En <strong>Explorar video</strong> los controles del reproductor quedan libres. Al capturar un frame se entra en <strong>Anotar frame</strong> y el canvas recibe el puntero. Presiona <kbd>Esc</kbd> para volver a explorar. Las cajas se guardan en píxeles fuente, no en píxeles CSS.</p>
+            <p class="runtime-note">En <strong>Explorar video</strong> los controles del reproductor quedan libres. Al capturar un frame se entra en <strong>Anotar frame</strong> y el canvas recibe el puntero. Presiona <kbd>Esc</kbd> para volver a explorar. Las cajas se guardan en píxeles fuente, no en píxeles CSS. <code>timestampMs</code> se inicializa igual a <code>mediaTimeMs</code>, pero ambos campos permanecen semánticamente separados.</p>
           </div>
 
           <aside class="annotation-sidebar">
