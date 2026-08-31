@@ -86,6 +86,7 @@ export function createDetectorBenchmarkReport(input: BenchmarkReportInput): Dete
       },
       latency: { ...input.benchmark.latency },
       classMetrics: input.benchmark.classMetrics.map((metric) => ({ ...metric })),
+      ...(input.benchmark.mediaSeek === undefined ? {} : { mediaSeek: { ...input.benchmark.mediaSeek } }),
       matching: {
         iouThreshold: input.benchmark.matching.iouThreshold,
         imageScaleThresholds: { ...input.benchmark.matching.imageScaleThresholds },
@@ -121,7 +122,7 @@ export function detectorBenchmarkSummaryCsv(report: DetectorBenchmarkReport): st
     'backend', 'runtime', 'runtimeVersion', 'iouThreshold', 'frameCount', 'className',
     'tp', 'fp', 'fn', 'precision', 'recall', 'f1', 'macroF1', 'matchedIoUMean',
     'totalMsP50', 'totalMsP95', 'inferenceMsP50', 'inferenceMsP95', 'effectiveInferenceFps',
-    'latencyDriftRatio',
+    'latencyDriftRatio', 'seekSampleCount', 'seekAbsErrorMeanMs', 'seekAbsErrorMaxMs',
   ];
   const rows = report.benchmark.classMetrics.map((metric) => csvRow([
     report.runId,
@@ -151,6 +152,9 @@ export function detectorBenchmarkSummaryCsv(report: DetectorBenchmarkReport): st
     report.benchmark.latency.inferenceMsP95,
     report.benchmark.latency.effectiveInferenceFps,
     report.benchmark.latency.latencyDriftRatio,
+    report.benchmark.mediaSeek?.sampleCount,
+    report.benchmark.mediaSeek?.absoluteErrorMeanMs,
+    report.benchmark.mediaSeek?.absoluteErrorMaxMs,
   ]));
   return `${[csvRow(header), ...rows].join('\n')}\n`;
 }
