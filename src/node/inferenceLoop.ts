@@ -33,10 +33,12 @@ export class NodeInferenceLoop<TFrame> {
   private readonly processor: InferenceFrameProcessor<TFrame>;
   private readonly maxConsecutiveErrors: number;
   private readonly processWhenHidden: boolean;
-  private readonly onFrame?: (frame: TFrame) => void;
-  private readonly onProcessingSample?: (processingMs: number, monotonicTimestampMs: number) => void;
-  private readonly onError?: (error: Error, consecutiveErrors: number) => void;
-  private readonly onStateChange?: (state: InferenceLoopState) => void;
+  private readonly onFrame: ((frame: TFrame) => void) | undefined;
+  private readonly onProcessingSample:
+    | ((processingMs: number, monotonicTimestampMs: number) => void)
+    | undefined;
+  private readonly onError: ((error: Error, consecutiveErrors: number) => void) | undefined;
+  private readonly onStateChange: ((state: InferenceLoopState) => void) | undefined;
   private targetFps: number;
   private state: InferenceLoopState = 'idle';
   private video: HTMLVideoElement | null = null;
