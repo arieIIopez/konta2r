@@ -341,11 +341,19 @@ export class MultiObjectTracker {
           xPxPerMs: (detection.groundPoint.x - previous.point.x) / dt,
           yPxPerMs: (detection.groundPoint.y - previous.point.y) / dt,
         };
-        const keep = clamp01(this.config.velocitySmoothing);
-        track.velocity = {
-          xPxPerMs: keep * track.velocity.xPxPerMs + (1 - keep) * observedVelocity.xPxPerMs,
-          yPxPerMs: keep * track.velocity.yPxPerMs + (1 - keep) * observedVelocity.yPxPerMs,
-        };
+
+        // The first measured displacement establishes the motion prior directly.
+        // Smoothing against an initial zero velocity would underpredict motion
+        // exactly when two objects first approach a crossing.
+        if (track.hits <= 1) {
+          track.velocity = observedVelocity;
+        } else {
+          const keep = clamp01(this.config.velocitySmoothing);
+          track.velocity = {
+            xPxPerMs: keep * track.velocity.xPxPerMs + (1 - keep) * observedVelocity.xPxPerMs,
+            yPxPerMs: keep * track.velocity.yPxPerMs + (1 - keep) * observedVelocity.yPxPerMs,
+          };
+        }
       }
     }
 
