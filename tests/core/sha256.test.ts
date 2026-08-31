@@ -48,8 +48,10 @@ describe('incremental SHA-256', () => {
 
   it('hashes Blob content in bounded chunks and reports monotonic progress', async () => {
     const content = bytes('abc'.repeat(1000));
+    const blobBuffer = new ArrayBuffer(content.byteLength);
+    new Uint8Array(blobBuffer).set(content);
     const progress: number[] = [];
-    const digest = await sha256BlobHex(new Blob([content]), {
+    const digest = await sha256BlobHex(new Blob([blobBuffer]), {
       chunkSizeBytes: 1024,
       onProgress: (value) => progress.push(value.processedBytes),
     });
