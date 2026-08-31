@@ -1,4 +1,5 @@
 import { NodeCameraController, type CameraRuntimeState } from './camera';
+import { ObservationContinuityMonitor, type ContinuitySnapshot } from './continuityMonitor';
 import {
   AdaptiveNodeProfileController,
   NODE_PROFILE_SETTINGS,
@@ -20,6 +21,7 @@ export interface NodeRuntimeSnapshot {
   wakeLock: WakeLockState;
   storage: NodeStorageHealth | null;
   health: NodeHealthSnapshot;
+  continuity: ContinuitySnapshot;
   online: boolean;
   secureContext: boolean;
   error?: string;
@@ -32,6 +34,7 @@ type ProfileChangeSource = 'manual' | 'adaptive';
 export class NodeRuntimeController {
   private readonly camera = new NodeCameraController();
   private readonly wakeLock = new ScreenWakeLockController();
+  private readonly continuityMonitor = new ObservationContinuityMonitor();
   private readonly listeners = new Set<NodeRuntimeListener>();
   private readonly hints = detectDeviceCapabilityHints();
   private healthMonitor: NodeHealthMonitor;
@@ -56,11 +59,13 @@ export class NodeRuntimeController {
       wakeLock: this.wakeLock.state(),
       storage: null,
       health: this.healthMonitor.snapshot(performance.now()),
+      continuity: this.continuityMonitor.snapshot(performance.now()),
       online: navigator.onLine,
       secureContext: window.isSecureContext,
     };
     window.addEventListener('online', this.connectivityHandler);
     window.addEventListener('offline', this.connectivityHandler);
+    document.addEventListener('visibilitychange', this.visibilityHandler);
   }
 
   subscribe(listener: NodeRuntimeListener): () => void {
@@ -81,6 +86,7 @@ export class NodeRuntimeController {
       wakeLock: { ...this.state.wakeLock },
       storage: this.state.storage ? { ...this.state.storage } : null,
       health: { ...this.state.health },
+      continuity: { ...this.state.continuity },
     };
   }
 
@@ -89,6 +95,7 @@ export class NodeRuntimeController {
     this.healthMonitor.record({ timestampMs, processingMs });
     const health = this.healthMonitor.snapshot(timestampMs);
     this.state.health = health;
+    this.state.continuity = this.continuityMonitor.snapshot(timestampMs);
     this.emit();
 
     if (health.sampleCount < 10 || timestampMs - this.lastAdaptationEvaluationMs < 10_000) return;
@@ -117,6 +124,12 @@ export class NodeRuntimeController {
       this.state.camera = await this.camera.start(this.video, this.state.profile);
       this.state.wakeLock = await this.wakeLock.enable();
       this.state.storage = await inspectNodeStorage(true);
+      const now = performance.now();
+      this.continuityMonitor.start(now);
+      if (document.visibilityState !== 'visible') {
+        this.continuityMonitor.pause('visibility_hidden', now);
+      }
+      this.state.continuity = this.continuityMonitor.snapshot(now);
       this.patch({ running: true, busy: false });
     } catch (error) {
       await this.camera.stop();
@@ -136,6 +149,9 @@ export class NodeRuntimeController {
     await this.camera.stop();
     this.state.camera = { active: false };
     this.state.wakeLock = await this.wakeLock.disable();
+    const now = performance.now();
+    this.continuityMonitor.stop(now);
+    this.state.continuity = this.continuityMonitor.snapshot(now);
     this.patch({ running: false, busy: false });
   }
 
@@ -168,6 +184,7 @@ export class NodeRuntimeController {
   destroy(): void {
     window.removeEventListener('online', this.connectivityHandler);
     window.removeEventListener('offline', this.connectivityHandler);
+    document.removeEventListener('visibilitychange', this.visibilityHandler);
     void this.camera.stop();
     this.wakeLock.destroy();
     this.listeners.clear();
@@ -175,6 +192,18 @@ export class NodeRuntimeController {
 
   private readonly connectivityHandler = (): void => {
     this.state.online = navigator.onLine;
+    this.emit();
+  };
+
+  private readonly visibilityHandler = (): void => {
+    if (!this.state.running) return;
+    const now = performance.now();
+    if (document.visibilityState === 'visible') {
+      this.continuityMonitor.resume(now);
+    } else {
+      this.continuityMonitor.pause('visibility_hidden', now);
+    }
+    this.state.continuity = this.continuityMonitor.snapshot(now);
     this.emit();
   };
 
