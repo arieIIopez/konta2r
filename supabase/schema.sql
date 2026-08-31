@@ -21,8 +21,6 @@ revoke all on schema private from public;
 revoke all on schema private from anon;
 revoke all on schema private from authenticated;
 
--- Move the project toward an opt-in Data API posture. Existing grants are handled
--- explicitly below; future objects should not become public APIs by accident.
 alter default privileges for role postgres in schema public
   revoke select, insert, update, delete on tables from anon, authenticated;
 alter default privileges for role postgres in schema public
@@ -87,8 +85,6 @@ comment on table public.nodes is
 create index if not exists nodes_owner_user_id_idx on public.nodes(owner_user_id);
 create index if not exists nodes_segment_id_idx on public.nodes(segment_id);
 
--- The browser/node never reads this table directly. Store a keyed HMAC/fingerprint,
--- not a raw node token. The HMAC key belongs in an Edge Function secret.
 create table if not exists private.node_credentials (
   node_id text primary key references public.nodes(node_id) on delete cascade,
   credential_hmac text not null,
@@ -105,8 +101,35 @@ create table if not exists private.node_credentials (
 comment on table private.node_credentials is
   'HMAC-SHA256 fingerprints of high-entropy node credentials. Raw credentials must never be stored.';
 
--- One row per Community upload envelope. The protocol already excludes raw video,
--- frames, track/session identifiers, precise lat/lon, faces, plates and embeddings.
+create table if not exists private.node_lifecycle_events (
+  event_id bigint generated always as identity primary key,
+  node_id text not null references public.nodes(node_id) on delete restrict,
+  actor_user_id uuid not null,
+  action text not null,
+  previous_status text not null,
+  next_status text not null,
+  credential_key_version smallint,
+  created_at timestamptz not null default now(),
+  constraint node_lifecycle_action check (action in ('activate', 'pause', 'revoke', 'rotate')),
+  constraint node_lifecycle_previous_status check (
+    previous_status in ('provisioning', 'active', 'paused', 'revoked')
+  ),
+  constraint node_lifecycle_next_status check (
+    next_status in ('provisioning', 'active', 'paused', 'revoked')
+  ),
+  constraint node_lifecycle_key_version check (
+    credential_key_version is null or credential_key_version > 0
+  )
+);
+
+comment on table private.node_lifecycle_events is
+  'Append-only private audit trail for human-authorized node lifecycle changes. actor_user_id is retained as audit evidence without a cascading auth.users foreign key.';
+
+create index if not exists node_lifecycle_events_node_created_idx
+  on private.node_lifecycle_events(node_id, created_at desc);
+create index if not exists node_lifecycle_events_actor_created_idx
+  on private.node_lifecycle_events(actor_user_id, created_at desc);
+
 create table if not exists private.community_batches (
   batch_id uuid primary key default gen_random_uuid(),
   node_id text not null references public.nodes(node_id) on delete restrict,
@@ -179,7 +202,6 @@ create table if not exists private.spatial_aggregates (
 create index if not exists spatial_aggregates_batch_idx on private.spatial_aggregates(batch_id);
 create index if not exists spatial_aggregates_bucket_idx on private.spatial_aggregates(bucket_start, entity_type);
 
--- RLS: every Data API reachable table is protected.
 alter table public.profiles enable row level security;
 alter table public.segments enable row level security;
 alter table public.nodes enable row level security;
@@ -212,8 +234,6 @@ create policy "nodes_select_own"
 
 -- Node creation and lifecycle mutation deliberately have no browser RLS policy.
 -- They are performed only after explicit server-side authorization.
-
--- Object reachability is explicit and intentionally narrower than privileged server access.
 revoke all on table public.profiles from anon, authenticated;
 revoke all on table public.nodes from anon, authenticated;
 revoke all on table public.segments from anon, authenticated;
@@ -222,7 +242,6 @@ grant select, insert, update on table public.profiles to authenticated;
 grant select on table public.nodes to authenticated;
 grant select on table public.segments to anon, authenticated;
 
--- Private schema stays unreachable through the normal browser roles.
 revoke all on all tables in schema private from public, anon, authenticated;
 revoke all on all sequences in schema private from public, anon, authenticated;
 

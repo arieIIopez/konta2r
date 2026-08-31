@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeNodeCredentialHmac,
+  createNodeCredentialMaterial,
   createNodeEnrollmentMaterial,
   generateNodeCredential,
   generatePseudonymousNodeId,
@@ -47,6 +48,21 @@ describe('node credential contract', () => {
     expect(first).not.toContain(credential);
   });
 
+  it('creates credential-only material for rotation without manufacturing a replacement node id', async () => {
+    const material = await createNodeCredentialMaterial(PEPPER_A, {
+      randomFill: deterministicFill(11),
+      keyVersion: 4,
+    });
+
+    expect(material).not.toHaveProperty('nodeId');
+    expect(isValidNodeCredential(material.credential)).toBe(true);
+    expect(material.credentialHmac).toMatch(/^[a-f0-9]{64}$/);
+    expect(material.keyVersion).toBe(4);
+    expect(material.credentialHmac).toBe(
+      await computeNodeCredentialHmac(material.credential, PEPPER_A),
+    );
+  });
+
   it('creates enrollment material ready for one-time token delivery and private HMAC persistence', async () => {
     const material = await createNodeEnrollmentMaterial(PEPPER_A, {
       randomFill: deterministicFill(7),
@@ -66,6 +82,7 @@ describe('node credential contract', () => {
     const credential = generateNodeCredential(deterministicFill());
     await expect(computeNodeCredentialHmac(credential, 'too-short')).rejects.toThrow('at least 32 bytes');
     await expect(computeNodeCredentialHmac('k2n_v1_not-valid', PEPPER_A)).rejects.toThrow('Invalid');
+    await expect(createNodeCredentialMaterial(PEPPER_A, { keyVersion: 0 })).rejects.toThrow('1..32767');
     await expect(createNodeEnrollmentMaterial(PEPPER_A, { keyVersion: 0 })).rejects.toThrow('1..32767');
   });
 

@@ -1,6 +1,10 @@
 import { enrollNodeForAuthenticatedUser } from '../../../src/backend/nodeEnroll.ts';
 import { createPostgresNodeEnrollStore } from '../_shared/postgresStores.ts';
-import { createEdgeSql, pepperForKeyVersion } from '../_shared/postgres.ts';
+import {
+  activeNodeCredentialKeyVersion,
+  createEdgeSql,
+  pepperForKeyVersion,
+} from '../_shared/postgres.ts';
 import {
   jsonResponse,
   optionsResponse,
@@ -31,13 +35,14 @@ Deno.serve(async (request: Request) => {
     const body = enrollBody(await readJsonWithLimit(request, 64 * 1024));
     if (!body) return jsonResponse({ code: 'invalid_enrollment_payload' }, 422);
 
-    const pepper = pepperForKeyVersion(1);
+    const keyVersion = activeNodeCredentialKeyVersion();
+    const pepper = pepperForKeyVersion(keyVersion);
     if (!pepper) return jsonResponse({ code: 'credential_key_unavailable' }, 503);
 
     const result = await enrollNodeForAuthenticatedUser(ownerUserId, body, {
       store,
       pepper,
-      keyVersion: 1,
+      keyVersion,
     });
 
     // credential is intentionally returned only in this response. Never log it.
@@ -69,6 +74,9 @@ Deno.serve(async (request: Request) => {
       || message === 'Observed segment does not exist'
     ) {
       return jsonResponse({ code: 'invalid_enrollment_payload' }, 422);
+    }
+    if (message === 'Invalid KONTA2R_NODE_TOKEN_ACTIVE_KEY_VERSION') {
+      return jsonResponse({ code: 'credential_key_unavailable' }, 503);
     }
 
     console.error('node-enroll failed without exposing credential material');
