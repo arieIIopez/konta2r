@@ -67,6 +67,48 @@ export const KALRAY_SSD_MOBILENET_V2_COCO: DetectorCandidateRecord = {
   ],
 };
 
+/**
+ * Independent 2026 ONNX conversion of the same TensorFlow frozen graph. Unlike
+ * the Kalray artifact, this source documents exact tensor names, uint8/NHWC
+ * preprocessing, a runnable ONNX Runtime demo and the ONNX file SHA-256. It is
+ * still probe_pending until Konta2r observes the artifact with its own runtime.
+ */
+export const OPENCV_SSD_MOBILENET_V2_COCO_2026JUL: DetectorCandidateRecord = {
+  id: 'opencv-ssd-mobilenet-v2-coco-2026jul',
+  displayName: 'SSD MobileNet V2 COCO — OpenCV contribution 2026-07',
+  architecture: 'SSD MobileNet V2',
+  role: 'legacy_baseline',
+  status: 'probe_pending',
+  dataset: 'COCO',
+  inputHint: {
+    width: 300,
+    height: 300,
+    layout: 'NHWC',
+    evidence: 'Source README and conversion script document raw RGB uint8 image_tensor:0 [1,300,300,3].',
+  },
+  artifact: {
+    url: 'https://huggingface.co/opencv/opencv_contribution/resolve/main/ssd_mobilenet_v2_coco_2018_03_29/ssd_mobilenet_v2_coco_2018_03_29_2026jul.onnx',
+    sha256: '7ba2fdaa87b8cbbb52c16b5c6e31a7452c00e8ad68aec580bfb7b07f5b212619',
+    declaredLicense: 'Apache-2.0',
+    redistributionVerified: false,
+    approximateSizeMb: 69.6,
+  },
+  sourceRepository: 'https://huggingface.co/opencv/opencv_contribution/tree/main/ssd_mobilenet_v2_coco_2018_03_29',
+  notes: [
+    'The source documents image_tensor:0 and the four TensorFlow Object Detection API outputs explicitly.',
+    'The repository includes an ONNX Runtime demo and records the original TensorFlow weights source.',
+    'Treat as an independent candidate; do not infer binary equivalence with the Kalray conversion.',
+    'Do not bundle from Konta2r while redistributionVerified=false.',
+  ],
+  evidenceUrls: [
+    'https://huggingface.co/opencv/opencv_contribution/tree/main/ssd_mobilenet_v2_coco_2018_03_29',
+    'https://huggingface.co/opencv/opencv_contribution/blob/main/ssd_mobilenet_v2_coco_2018_03_29/README.md',
+    'https://huggingface.co/opencv/opencv_contribution/blob/main/ssd_mobilenet_v2_coco_2018_03_29/convert_to_onnx.py',
+    'https://huggingface.co/opencv/opencv_contribution/blob/main/ssd_mobilenet_v2_coco_2018_03_29/ssd_mobilenet_v2_coco_2018_03_29_2026jul.onnx',
+  ],
+};
+
 export const DETECTOR_CANDIDATES: readonly DetectorCandidateRecord[] = [
   KALRAY_SSD_MOBILENET_V2_COCO,
+  OPENCV_SSD_MOBILENET_V2_COCO_2026JUL,
 ];
