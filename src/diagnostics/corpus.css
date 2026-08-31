@@ -15,7 +15,18 @@
   letter-spacing: .05em;
 }
 .corpus-input-card strong { font-size: .8rem; overflow-wrap: anywhere; }
-.corpus-input-card input { color: #94a3b8; font-size: .72rem; }
+.corpus-input-card input,
+.corpus-input-card select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0 10px;
+  font-size: .72rem;
+}
+.corpus-input-card input[type="file"] { padding: 7px 0; border: 0; background: transparent; color: #94a3b8; }
 .corpus-input-card p { margin: 7px 0 0; color: #94a3b8; font-size: .72rem; }
 
 .corpus-kpis {
@@ -33,7 +44,7 @@
   background: rgba(15, 23, 42, .72);
   border: 1px solid rgba(148, 163, 184, .1);
 }
-.corpus-kpis strong { font-size: 1.05rem; }
+.corpus-kpis strong { font-size: 1.05rem; overflow-wrap: anywhere; }
 .corpus-kpis small { color: #94a3b8; font-size: .67rem; }
 
 .corpus-grid {
@@ -76,7 +87,30 @@
 .corpus-finding p { margin: 4px 0 0; color: #cbd5e1; font-size: .7rem; line-height: 1.45; }
 .corpus-method-note { margin: 0 12px 12px; }
 
+.manifest-builder-form { display: grid; gap: 9px; }
+.manifest-builder-form > .action { min-height: 42px; }
+.corpus-builder-list { margin: 0 12px 12px; }
+.corpus-builder-sequence { align-items: center; }
+.corpus-builder-sequence span { min-width: 0; overflow-wrap: anywhere; }
+.corpus-builder-export {
+  display: flex;
+  gap: 8px;
+  margin: 0 12px 12px;
+}
+.annotation-message {
+  margin: 0 12px 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, .72);
+  border: 1px solid rgba(148, 163, 184, .1);
+  color: #cbd5e1;
+  font-size: .74rem;
+}
+
 @media (min-width: 680px) {
   .corpus-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .corpus-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .manifest-builder-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .manifest-builder-form > .action,
+  .manifest-builder-form > p { grid-column: 1 / -1; }
 }
