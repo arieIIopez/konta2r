@@ -2,7 +2,7 @@ import {
   createNodeEnrollmentMaterial,
   type NodeEnrollmentMaterial,
   type SecureRandomFill,
-} from './nodeCredential';
+} from './nodeCredential.ts';
 
 export interface NodeEnrollRequest {
   label: string;
