@@ -161,7 +161,13 @@ export function assessDetectorBenchmarkValidity(
   }
 
   const absoluteErrors = evidencedFrames
-    .map((frame) => Math.abs(frame.seekErrorMs ?? 0))
+    .map((frame) => {
+      const expected = frame.mediaTimeMs;
+      const actual = frame.actualMediaTimeMs;
+      return expected === undefined || actual === undefined
+        ? Number.NaN
+        : Math.abs(actual - expected);
+    })
     .filter(Number.isFinite);
   const maxObservedSeekErrorMs = absoluteErrors.length === 0 ? null : Math.max(...absoluteErrors);
   if (maxObservedSeekErrorMs !== null && maxObservedSeekErrorMs > resolved.maxSeekErrorMs) {
