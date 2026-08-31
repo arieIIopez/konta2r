@@ -77,7 +77,8 @@ export class NodeRuntimeController {
     if (!this.video) throw new Error('Node video surface is not attached');
     if (!this.state.secureContext) throw new Error('A secure context is required to start the node');
 
-    this.patch({ busy: true, error: undefined });
+    this.clearError();
+    this.patch({ busy: true });
     try {
       this.state.camera = await this.camera.start(this.video, this.state.profile);
       this.state.wakeLock = await this.wakeLock.enable();
@@ -110,7 +111,8 @@ export class NodeRuntimeController {
     this.emit();
     if (!this.state.running || !this.video) return;
 
-    this.patch({ busy: true, error: undefined });
+    this.clearError();
+    this.patch({ busy: true });
     try {
       this.state.camera = await this.camera.start(this.video, profile);
       this.patch({ busy: false });
@@ -136,6 +138,10 @@ export class NodeRuntimeController {
     this.state.online = navigator.onLine;
     this.emit();
   };
+
+  private clearError(): void {
+    if ('error' in this.state) delete this.state.error;
+  }
 
   private patch(values: Partial<NodeRuntimeSnapshot>): void {
     this.state = { ...this.state, ...values };
