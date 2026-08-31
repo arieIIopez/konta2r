@@ -1,9 +1,8 @@
-import { computeNodeCredentialHmac, isValidNodeCredential } from './nodeCredential';
+import { computeNodeCredentialHmac, isValidNodeCredential } from './nodeCredential.ts';
 import {
   validateCommunityUpload,
   type CommunityUploadEnvelope,
-} from '../community/protocol';
-import { communityIdempotencyKey } from '../community/outbox';
+} from '../community/protocol.ts';
 
 export type NodeOperationalStatus = 'provisioning' | 'active' | 'paused' | 'revoked';
 
@@ -149,7 +148,7 @@ export async function evaluateCommunityIngest(
   }
   if (!validation.valid) return reject(422, 'invalid_community_payload');
 
-  const expectedIdempotencyKey = communityIdempotencyKey(envelope.nodeId, envelope.sequence);
+  const expectedIdempotencyKey = `${envelope.nodeId}:${envelope.sequence}`;
   if (request.idempotencyKey !== expectedIdempotencyKey) {
     return reject(400, 'idempotency_key_mismatch');
   }
