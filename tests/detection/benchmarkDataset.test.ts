@@ -26,7 +26,7 @@ describe('annotated benchmark corpus', () => {
     })).toThrow('Duplicate annotationId');
   });
 
-  it('rejects sequences whose timestamps move backwards', () => {
+  it('rejects sequences whose logical timestamps move backwards', () => {
     expect(() => validateAnnotatedBenchmarkSequence({
       schemaVersion: '1',
       datasetId: 'dataset',
@@ -36,5 +36,28 @@ describe('annotated benchmark corpus', () => {
         { frameId: 'b', timestampMs: 90, width: 640, height: 360, objects: [] },
       ],
     })).toThrow('non-decreasing');
+  });
+
+  it('tracks media seek time independently and rejects backwards seeks', () => {
+    expect(() => validateAnnotatedBenchmarkSequence({
+      schemaVersion: '1',
+      datasetId: 'dataset',
+      sequenceId: 'sequence',
+      frames: [
+        { frameId: 'a', timestampMs: 1000, mediaTimeMs: 500, width: 640, height: 360, objects: [] },
+        { frameId: 'b', timestampMs: 1200, mediaTimeMs: 400, width: 640, height: 360, objects: [] },
+      ],
+    })).toThrow('mediaTimeMs values must be non-decreasing');
+  });
+
+  it('rejects negative media seek positions without constraining logical timestamps to media time', () => {
+    expect(() => validateAnnotatedBenchmarkFrame({
+      frameId: 'f',
+      timestampMs: 10_000,
+      mediaTimeMs: -1,
+      width: 640,
+      height: 360,
+      objects: [],
+    })).toThrow('mediaTimeMs must be finite and non-negative');
   });
 });
