@@ -8,6 +8,12 @@ function formatBytes(value: number | undefined): string {
   return gib >= 0.1 ? `${gib.toFixed(1)} GiB` : `${(value / (1024 ** 2)).toFixed(0)} MiB`;
 }
 
+function formatDuration(valueMs: number): string {
+  if (valueMs < 60_000) return `${Math.round(valueMs / 1000)} s`;
+  if (valueMs < 3_600_000) return `${(valueMs / 60_000).toFixed(1)} min`;
+  return `${(valueMs / 3_600_000).toFixed(1)} h`;
+}
+
 function setText(root: HTMLElement, selector: string, value: string): void {
   const element = root.querySelector<HTMLElement>(selector);
   if (element) element.textContent = value;
@@ -47,6 +53,7 @@ export class NodePanel {
             <div class="runtime-stat"><span>Perfil</span><strong data-profile>—</strong><small data-profile-detail>—</small></div>
             <div class="runtime-stat"><span>Cámara</span><strong data-camera>—</strong><small data-camera-detail>—</small></div>
             <div class="runtime-stat"><span>Carga</span><strong data-load>—</strong><small data-load-detail>—</small></div>
+            <div class="runtime-stat"><span>Continuidad</span><strong data-continuity>—</strong><small data-continuity-detail>—</small></div>
             <div class="runtime-stat"><span>Wake lock</span><strong data-wake>—</strong><small data-wake-detail>—</small></div>
             <div class="runtime-stat"><span>Storage</span><strong data-storage>—</strong><small data-storage-detail>—</small></div>
             <div class="runtime-stat"><span>Red</span><strong data-network>—</strong><small>la cola local puede seguir acumulando agregados</small></div>
@@ -115,6 +122,14 @@ export class NodePanel {
     } else {
       setText(root, '[data-load]', snapshot.health.loadPressure);
       setText(root, '[data-load-detail]', `${snapshot.health.observedFps.toFixed(1)} Hz · p95 ${snapshot.health.processingLatencyP95Ms.toFixed(0)} ms · drops ${(snapshot.health.droppedFrameRatio * 100).toFixed(0)}%`);
+    }
+
+    if (snapshot.continuity.elapsedMs === 0) {
+      setText(root, '[data-continuity]', 'sin sesión');
+      setText(root, '[data-continuity-detail]', 'el uptime se calcula desde el inicio del nodo');
+    } else {
+      setText(root, '[data-continuity]', `${(snapshot.continuity.uptimeRatio * 100).toFixed(1)}%`);
+      setText(root, '[data-continuity-detail]', `${formatDuration(snapshot.continuity.activeMs)} activos · ${snapshot.continuity.gapCount} gaps · gap máx. ${formatDuration(snapshot.continuity.longestGapMs)}`);
     }
 
     setText(root, '[data-wake]', snapshot.wakeLock.active ? 'activo' : snapshot.wakeLock.supported ? 'inactivo' : 'no disponible');
