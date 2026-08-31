@@ -1,16 +1,3 @@
-interface WakeLockSentinelLike extends EventTarget {
-  released: boolean;
-  release(): Promise<void>;
-}
-
-interface WakeLockLike {
-  request(type?: 'screen'): Promise<WakeLockSentinelLike>;
-}
-
-interface NavigatorWithWakeLock extends Navigator {
-  wakeLock?: WakeLockLike;
-}
-
 export interface WakeLockState {
   supported: boolean;
   desired: boolean;
@@ -23,7 +10,7 @@ export interface WakeLockState {
  * is unsupported or revoked; UI/telemetry can surface that limitation.
  */
 export class ScreenWakeLockController {
-  private sentinel: WakeLockSentinelLike | null = null;
+  private sentinel: WakeLockSentinel | null = null;
   private desired = false;
   private lastError: string | undefined;
   private readonly visibilityHandler = (): void => {
@@ -37,7 +24,7 @@ export class ScreenWakeLockController {
   }
 
   supported(): boolean {
-    return Boolean((navigator as NavigatorWithWakeLock).wakeLock?.request);
+    return 'wakeLock' in navigator && typeof navigator.wakeLock?.request === 'function';
   }
 
   async enable(): Promise<WakeLockState> {
@@ -76,14 +63,13 @@ export class ScreenWakeLockController {
   private async acquire(): Promise<void> {
     this.lastError = undefined;
     if (!this.desired || document.visibilityState !== 'visible') return;
-    const wakeLock = (navigator as NavigatorWithWakeLock).wakeLock;
-    if (!wakeLock?.request) {
+    if (!this.supported()) {
       this.lastError = 'unsupported';
       return;
     }
 
     try {
-      const sentinel = await wakeLock.request('screen');
+      const sentinel = await navigator.wakeLock.request('screen');
       this.sentinel = sentinel;
       sentinel.addEventListener('release', () => {
         if (this.sentinel === sentinel) this.sentinel = null;
