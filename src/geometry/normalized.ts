@@ -90,6 +90,20 @@ export function normalizedPointToCanonical(
   };
 }
 
+export function canonicalPointToNormalized(
+  point: Point2D,
+  frameWidth: number,
+  frameHeight: number,
+): NormalizedPoint2D {
+  assertDimension(frameWidth, 'frameWidth');
+  assertDimension(frameHeight, 'frameHeight');
+  const aspectRatio = frameWidth / frameHeight;
+  return {
+    x: point.x / aspectRatio,
+    y: point.y,
+  };
+}
+
 export function validateNormalizedLine(line: NormalizedDirectedLine): void {
   assertNormalizedPoint(line.a);
   assertNormalizedPoint(line.b);
