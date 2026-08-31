@@ -25,6 +25,10 @@ export interface AnnotatedBenchmarkFrameInput {
   source: CanvasImageSource;
 }
 
+export interface BenchmarkFrameAcquisitionMetadata {
+  actualMediaTimeMs?: number;
+}
+
 export interface RecallStratum {
   className: string;
   value: string;
@@ -37,12 +41,21 @@ export interface RecallStratum {
 export interface AnnotatedBenchmarkFrameRecord {
   frameId: string;
   timestampMs: number;
+  mediaTimeMs?: number;
+  actualMediaTimeMs?: number;
+  seekErrorMs?: number;
   detectionCount: number;
   matchCount: number;
   falsePositiveCount: number;
   falseNegativeCount: number;
   ignoredDetectionCount: number;
   matches: DetectionGroundTruthMatch[];
+}
+
+export interface MediaSeekQualitySummary {
+  sampleCount: number;
+  absoluteErrorMeanMs: number;
+  absoluteErrorMaxMs: number;
 }
 
 export interface AnnotatedDetectorBenchmarkResult extends DetectorBenchmarkResult {
@@ -53,6 +66,7 @@ export interface AnnotatedDetectorBenchmarkResult extends DetectorBenchmarkResul
   ignoredGroundTruthCount: number;
   ignoredDetectionCount: number;
   matchedIoUMean: number;
+  mediaSeek?: MediaSeekQualitySummary;
   matching: {
     iouThreshold: number;
     imageScaleThresholds: ImageScaleThresholds;
@@ -150,6 +164,13 @@ function cloneInitialization(initialization: DetectorInitialization): DetectorIn
   };
 }
 
+function validateActualMediaTime(value: number | undefined): void {
+  if (value === undefined) return;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error('actualMediaTimeMs must be finite and non-negative');
+  }
+}
+
 /**
  * Stateful accumulator shared by in-memory and streaming benchmark runners.
  * It never retains CanvasImageSource objects; only detector outputs and compact
@@ -165,6 +186,7 @@ export class AnnotatedBenchmarkAccumulator {
   private readonly scaleCounters = new Map<string, StratumCounter>();
   private readonly occlusionCounters = new Map<string, StratumCounter>();
   private readonly matchedIoUs: number[] = [];
+  private readonly absoluteSeekErrorsMs: number[] = [];
   private evaluatedGroundTruthCount = 0;
   private ignoredGroundTruthCount = 0;
   private ignoredDetectionCount = 0;
@@ -180,8 +202,13 @@ export class AnnotatedBenchmarkAccumulator {
     };
   }
 
-  addFrame(frame: AnnotatedBenchmarkFrame, output: DetectorOutput): void {
+  addFrame(
+    frame: AnnotatedBenchmarkFrame,
+    output: DetectorOutput,
+    acquisition: BenchmarkFrameAcquisitionMetadata = {},
+  ): void {
     validateAnnotatedBenchmarkFrame(frame);
+    validateActualMediaTime(acquisition.actualMediaTimeMs);
     this.outputs.push({
       ...output,
       detections: output.detections.map((detection) => ({
@@ -210,9 +237,18 @@ export class AnnotatedBenchmarkAccumulator {
     this.evaluatedGroundTruthCount += counts.evaluated;
     this.ignoredGroundTruthCount += counts.ignored;
 
+    let seekErrorMs: number | undefined;
+    if (frame.mediaTimeMs !== undefined && acquisition.actualMediaTimeMs !== undefined) {
+      seekErrorMs = acquisition.actualMediaTimeMs - frame.mediaTimeMs;
+      this.absoluteSeekErrorsMs.push(Math.abs(seekErrorMs));
+    }
+
     this.frameRecords.push({
       frameId: frame.frameId,
       timestampMs: frame.timestampMs,
+      ...(frame.mediaTimeMs === undefined ? {} : { mediaTimeMs: frame.mediaTimeMs }),
+      ...(acquisition.actualMediaTimeMs === undefined ? {} : { actualMediaTimeMs: acquisition.actualMediaTimeMs }),
+      ...(seekErrorMs === undefined ? {} : { seekErrorMs }),
       detectionCount: output.detections.length,
       matchCount: evaluation.matches.length,
       falsePositiveCount: evaluation.falsePositiveDetectionIndices.length,
@@ -224,6 +260,13 @@ export class AnnotatedBenchmarkAccumulator {
 
   finalize(): AnnotatedDetectorBenchmarkResult {
     const aggregate = buildDetectorBenchmarkResult(this.outputs, this.accuracyObservations);
+    const mediaSeek = this.absoluteSeekErrorsMs.length === 0
+      ? undefined
+      : {
+          sampleCount: this.absoluteSeekErrorsMs.length,
+          absoluteErrorMeanMs: mean(this.absoluteSeekErrorsMs),
+          absoluteErrorMaxMs: Math.max(...this.absoluteSeekErrorsMs),
+        };
     return {
       schemaVersion: '1',
       detector: cloneInitialization(this.initialization),
@@ -232,6 +275,7 @@ export class AnnotatedBenchmarkAccumulator {
       ignoredGroundTruthCount: this.ignoredGroundTruthCount,
       ignoredDetectionCount: this.ignoredDetectionCount,
       matchedIoUMean: mean(this.matchedIoUs),
+      ...(mediaSeek === undefined ? {} : { mediaSeek }),
       matching: {
         iouThreshold: this.iouThreshold,
         imageScaleThresholds: { ...this.imageScaleThresholds },
