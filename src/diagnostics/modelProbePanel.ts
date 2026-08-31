@@ -164,6 +164,8 @@ export class ModelProbePanel {
         button.disabled = false;
         button.textContent = 'Verificar e inspeccionar nuevamente';
       }
+      const select = this.mountElement?.querySelector<HTMLSelectElement>('[data-probe-candidate]');
+      if (select) select.disabled = false;
     }
   }
 
