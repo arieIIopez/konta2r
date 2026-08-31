@@ -122,6 +122,76 @@ function assessSsdContract(inputs, outputs) {
   };
 }
 
+function tensorRuntimeSummary(name, tensor) {
+  return {
+    name,
+    type: String(tensor.type),
+    shape: [...tensor.dims],
+    dataLength: tensor.data.length,
+  };
+}
+
+function finiteTensorData(tensor) {
+  for (let index = 0; index < tensor.data.length; index += 1) {
+    if (!Number.isFinite(Number(tensor.data[index]))) return false;
+  }
+  return true;
+}
+
+async function runtimeSmokeInference(session) {
+  const inputName = 'image_tensor:0';
+  const inputShape = [1, candidate.expectedHeight, candidate.expectedWidth, 3];
+  const input = new ort.Tensor(
+    'uint8',
+    new Uint8Array(candidate.expectedWidth * candidate.expectedHeight * 3),
+    inputShape,
+  );
+  let outputs;
+  try {
+    const startedAt = performance.now();
+    outputs = await session.run({ [inputName]: input });
+    const elapsedMs = performance.now() - startedAt;
+    const boxes = outputs['detection_boxes:0'];
+    const scores = outputs['detection_scores:0'];
+    const classes = outputs['detection_classes:0'];
+    const num = outputs['num_detections:0'];
+    if (!boxes || !scores || !classes || !num) {
+      throw new Error('smoke_inference_missing_expected_output');
+    }
+    const declaredCount = Number(num.data[0]);
+    const availableBoxes = Math.floor(boxes.data.length / 4);
+    const availableScores = scores.data.length;
+    const availableClasses = classes.data.length;
+    const invariants = {
+      inputAcceptedAt300x300: true,
+      boxesLastDimension4: boxes.dims.at(-1) === 4,
+      scoresClassesDataLengthMatch: availableScores === availableClasses,
+      numDetectionsFinite: Number.isFinite(declaredCount),
+      numDetectionsWithinAvailableOutputs:
+        Number.isFinite(declaredCount)
+        && declaredCount >= 0
+        && declaredCount <= Math.min(availableBoxes, availableScores, availableClasses),
+      boxesFinite: finiteTensorData(boxes),
+      scoresFinite: finiteTensorData(scores),
+      classesFinite: finiteTensorData(classes),
+    };
+    return {
+      schemaVersion: '1',
+      input: { name: inputName, type: 'uint8', shape: inputShape },
+      outputs: Object.entries(outputs).map(([name, tensor]) => tensorRuntimeSummary(name, tensor)),
+      declaredNumDetections: declaredCount,
+      elapsedMs,
+      invariants,
+      passed: Object.values(invariants).every(Boolean),
+    };
+  } finally {
+    input.dispose();
+    if (outputs) {
+      for (const tensor of Object.values(outputs)) tensor.dispose();
+    }
+  }
+}
+
 async function main() {
   console.log(`Downloading ${candidate.id}...`);
   const response = await fetch(candidate.url, { redirect: 'follow' });
@@ -134,9 +204,6 @@ async function main() {
     throw new Error(`sha256_mismatch:expected=${candidate.sha256}:received=${digest}`);
   }
 
-  // Official ONNX Runtime Web documentation supports the single-threaded WASM
-  // execution provider in Node.js. This probe only creates a session and reads
-  // metadata; it does not execute detector inference.
   ort.env.wasm.numThreads = 1;
   const session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'] });
   try {
@@ -148,6 +215,9 @@ async function main() {
       ? numericDimensions.includes(candidate.expectedWidth) && numericDimensions.includes(candidate.expectedHeight)
       : undefined;
     const compatibility = assessSsdContract(inputs, outputs);
+    console.log('Running zero-frame smoke inference at [1,300,300,3]...');
+    const runtimeValidation = await runtimeSmokeInference(session);
+    console.log(`smoke=${runtimeValidation.passed}; outputs=${JSON.stringify(runtimeValidation.outputs)}`);
     const probedAtIso = new Date().toISOString();
     const record = {
       schemaVersion: '1',
@@ -184,13 +254,14 @@ async function main() {
         },
       },
       codecCompatibility: compatibility,
+      runtimeValidation,
     };
 
     await mkdir(new URL('../artifacts/', import.meta.url), { recursive: true });
     await writeFile(outputPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
     console.log(`Diagnostic written to ${outputPath}`);
-    console.log(`metadata=${record.probe.metadataCompleteness}; codec=${compatibility.status}`);
-    if (record.probe.metadataCompleteness !== 'complete' || compatibility.status !== 'compatible') {
+    console.log(`metadata=${record.probe.metadataCompleteness}; codec=${compatibility.status}; smoke=${runtimeValidation.passed}`);
+    if (record.probe.metadataCompleteness !== 'complete' || compatibility.status !== 'compatible' || !runtimeValidation.passed) {
       process.exitCode = 2;
     }
   } finally {
