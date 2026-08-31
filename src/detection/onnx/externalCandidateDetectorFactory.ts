@@ -1,6 +1,12 @@
 import type { DetectorCandidateRecord } from '../modelCandidates';
 import type { RegisteredDetectorModel } from '../modelRegistry';
 import { OnnxDetectorAdapter } from './adapter';
+import {
+  NANODET_PLUS_MOBILITY_COCO_CLASS_MAP,
+  NanoDetPlusCodec,
+  type NanoDetFrameContext,
+  type NanoDetRgbLetterbox,
+} from './nanodetPlus';
 import type { OnnxCandidateProbeDiagnosticRecord } from './probeDiagnostic';
 import type { OnnxModelProbeResult } from './modelProbe';
 import type { VerifiedOnnxArtifact } from './modelArtifact';
@@ -24,6 +30,8 @@ export interface ExternalCandidateDetectorFactoryOptions {
   preferWebGpu?: boolean;
   /** Test/advanced hook. Production field diagnostics should normally use the default canvas resizer. */
   ssdRgbResize?: SsdTfRgbResize;
+  /** Test/advanced hook for reproducing NanoDet letterbox pixels outside a browser canvas. */
+  nanodetRgbLetterbox?: NanoDetRgbLetterbox;
 }
 
 export interface ExternalCandidateDetectorBuild<TContext = unknown> {
@@ -33,6 +41,10 @@ export interface ExternalCandidateDetectorBuild<TContext = unknown> {
   probeVerified: true;
   redistributionVerified: boolean;
 }
+
+export type SupportedExternalCandidateBuild =
+  | ExternalCandidateDetectorBuild<SsdTfFrameContext>
+  | ExternalCandidateDetectorBuild<NanoDetFrameContext>;
 
 function probeFromDiagnostic(
   diagnostic: OnnxCandidateProbeDiagnosticRecord,
@@ -136,53 +148,93 @@ function assertArtifactMatchesCandidate(
   }
 }
 
+function adapterOptions(
+  options: ExternalCandidateDetectorFactoryOptions,
+): Pick<
+  ConstructorParameters<typeof OnnxDetectorAdapter>[0],
+  'maxDetections' | 'capabilities' | 'sessionFactory' | 'preferWebGpu'
+> {
+  return {
+    ...(options.maxDetections === undefined ? {} : { maxDetections: options.maxDetections }),
+    ...(options.capabilities === undefined ? {} : { capabilities: options.capabilities }),
+    ...(options.sessionFactory === undefined ? {} : { sessionFactory: options.sessionFactory }),
+    ...(options.preferWebGpu === undefined ? {} : { preferWebGpu: options.preferWebGpu }),
+  };
+}
+
 /**
- * Builds a detector for experimental benchmarking from an externally fetched
- * checkpoint. The model bytes remain external/in-memory: this function does not
- * bundle, persist or make any redistribution decision.
+ * Builds an experimental detector from a checkpoint whose identity, ONNX
+ * contract and family-specific technical gate are already verified. Model bytes
+ * remain external/in-memory; no bundling or redistribution decision is made.
  */
 export function buildExternalCandidateDetector(
   candidate: DetectorCandidateRecord,
   artifact: VerifiedOnnxArtifact,
   diagnostic: OnnxCandidateProbeDiagnosticRecord,
   options: ExternalCandidateDetectorFactoryOptions = {},
-): ExternalCandidateDetectorBuild<SsdTfFrameContext> {
+): SupportedExternalCandidateBuild {
   assertArtifactMatchesCandidate(candidate, artifact);
   const verification = verifyCandidateProbeDiagnostic(candidate, diagnostic);
   if (verification.status !== 'verified') {
     throw new Error(`Candidate probe is not technically verified: ${verification.status}`);
   }
 
-  if (candidate.codecId !== 'ssd_tf_object_detection') {
-    throw new Error(`No external detector factory is implemented for codec ${candidate.codecId ?? 'none'}`);
+  const codecProbe = materializeVerifiedRuntimeContract(diagnostic);
+
+  if (candidate.codecId === 'ssd_tf_object_detection') {
+    const codec = SsdTfObjectDetectionCodec.fromProbe(codecProbe, {
+      ...(options.ssdRgbResize === undefined ? {} : { resizeRgb: options.ssdRgbResize }),
+    });
+    const model = buildExperimentalModelMetadata(
+      candidate,
+      artifact,
+      uniqueClassNames(SSD_TF_MOBILITY_COCO_CLASS_MAP),
+    );
+    const detector = new OnnxDetectorAdapter<SsdTfFrameContext>({
+      model,
+      modelSource: artifact.bytes,
+      codec,
+      eligibilityMode: 'experiment',
+      ...(options.minConfidence === undefined ? {} : { minConfidence: options.minConfidence }),
+      ...adapterOptions(options),
+    });
+    return {
+      detector,
+      model,
+      candidateId: candidate.id,
+      probeVerified: true,
+      redistributionVerified: candidate.artifact.redistributionVerified,
+    };
   }
 
-  const codecProbe = materializeVerifiedRuntimeContract(diagnostic);
-  const codec = SsdTfObjectDetectionCodec.fromProbe(codecProbe, {
-    ...(options.ssdRgbResize === undefined ? {} : { resizeRgb: options.ssdRgbResize }),
-  });
-  const model = buildExperimentalModelMetadata(
-    candidate,
-    artifact,
-    uniqueClassNames(SSD_TF_MOBILITY_COCO_CLASS_MAP),
-  );
-  const detector = new OnnxDetectorAdapter<SsdTfFrameContext>({
-    model,
-    modelSource: artifact.bytes,
-    codec,
-    eligibilityMode: 'experiment',
-    ...(options.minConfidence === undefined ? {} : { minConfidence: options.minConfidence }),
-    ...(options.maxDetections === undefined ? {} : { maxDetections: options.maxDetections }),
-    ...(options.capabilities === undefined ? {} : { capabilities: options.capabilities }),
-    ...(options.sessionFactory === undefined ? {} : { sessionFactory: options.sessionFactory }),
-    ...(options.preferWebGpu === undefined ? {} : { preferWebGpu: options.preferWebGpu }),
-  });
+  if (candidate.codecId === 'nanodet_plus_gfl') {
+    const codec = NanoDetPlusCodec.fromProbe(codecProbe, {
+      scoreThreshold: options.minConfidence ?? 0.35,
+      ...(options.nanodetRgbLetterbox === undefined
+        ? {}
+        : { letterboxRgb: options.nanodetRgbLetterbox }),
+    });
+    const model = buildExperimentalModelMetadata(
+      candidate,
+      artifact,
+      uniqueClassNames(NANODET_PLUS_MOBILITY_COCO_CLASS_MAP),
+    );
+    const detector = new OnnxDetectorAdapter<NanoDetFrameContext>({
+      model,
+      modelSource: artifact.bytes,
+      codec,
+      eligibilityMode: 'experiment',
+      ...(options.minConfidence === undefined ? {} : { minConfidence: options.minConfidence }),
+      ...adapterOptions(options),
+    });
+    return {
+      detector,
+      model,
+      candidateId: candidate.id,
+      probeVerified: true,
+      redistributionVerified: candidate.artifact.redistributionVerified,
+    };
+  }
 
-  return {
-    detector,
-    model,
-    candidateId: candidate.id,
-    probeVerified: true,
-    redistributionVerified: candidate.artifact.redistributionVerified,
-  };
+  throw new Error(`No external detector factory is implemented for codec ${candidate.codecId ?? 'none'}`);
 }
