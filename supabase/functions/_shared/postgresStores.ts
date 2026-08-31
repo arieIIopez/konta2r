@@ -8,6 +8,12 @@ import type {
   NodeEnrollPersistenceInput,
   NodeEnrollStore,
 } from '../../../src/backend/nodeEnroll.ts';
+import type {
+  NodeCredentialRotationInput,
+  NodeLifecycleStore,
+  NodeLifecycleTransitionInput,
+  OwnedNodeLifecycleState,
+} from '../../../src/backend/nodeLifecycle.ts';
 import type { CommunityAggregateRecord } from '../../../src/community/protocol.ts';
 import { createEdgeSql } from './postgres.ts';
 
@@ -35,6 +41,12 @@ function chunks<T>(values: readonly T[], size: number): T[][] {
     output.push(values.slice(index, index + size));
   }
   return output;
+}
+
+function lifecycleStatus(value: unknown): OwnedNodeLifecycleState['status'] | undefined {
+  return typeof value === 'string' && ['provisioning', 'active', 'paused', 'revoked'].includes(value)
+    ? value as OwnedNodeLifecycleState['status']
+    : undefined;
 }
 
 export function createPostgresNodeEnrollStore(sql: EdgeSql): NodeEnrollStore {
@@ -65,6 +77,150 @@ export function createPostgresNodeEnrollStore(sql: EdgeSql): NodeEnrollStore {
             ${input.nodeId}, ${input.credentialHmac}, ${input.keyVersion}
           )
         `;
+      });
+    },
+  };
+}
+
+export function createPostgresNodeLifecycleStore(sql: EdgeSql): NodeLifecycleStore {
+  return {
+    async getOwnedNode(ownerUserId: string, nodeId: string): Promise<OwnedNodeLifecycleState | undefined> {
+      const rows = await sql`
+        select node_id, owner_user_id::text as owner_user_id, status
+        from public.nodes
+        where node_id = ${nodeId} and owner_user_id = ${ownerUserId}::uuid
+        limit 1
+      `;
+      const row = rowRecord(rows[0]);
+      const status = lifecycleStatus(row?.status);
+      if (
+        !row
+        || typeof row.node_id !== 'string'
+        || typeof row.owner_user_id !== 'string'
+        || status === undefined
+      ) return undefined;
+      return {
+        nodeId: row.node_id,
+        ownerUserId: row.owner_user_id,
+        status,
+      };
+    },
+
+    async applyTransition(input: NodeLifecycleTransitionInput): Promise<boolean> {
+      return await sql.begin(async (tx) => {
+        const lockedRows = await tx`
+          select node_id, status
+          from public.nodes
+          where node_id = ${input.nodeId} and owner_user_id = ${input.ownerUserId}::uuid
+          for update
+        `;
+        const locked = rowRecord(lockedRows[0]);
+        if (!locked || locked.status !== input.expectedStatus) return false;
+
+        const credentialRows = await tx`
+          select key_version
+          from private.node_credentials
+          where node_id = ${input.nodeId}
+          for update
+        `;
+        const credential = rowRecord(credentialRows[0]);
+        const keyVersion = typeof credential?.key_version === 'number'
+          ? credential.key_version
+          : null;
+
+        const updated = await tx`
+          update public.nodes
+          set
+            status = ${input.nextStatus},
+            updated_at = now(),
+            revoked_at = case when ${input.nextStatus} = 'revoked' then now() else null end
+          where node_id = ${input.nodeId}
+            and owner_user_id = ${input.ownerUserId}::uuid
+            and status = ${input.expectedStatus}
+          returning node_id
+        `;
+        if (!rowRecord(updated[0])) return false;
+
+        if (input.revokeCredential) {
+          await tx`
+            update private.node_credentials
+            set revoked_at = coalesce(revoked_at, now())
+            where node_id = ${input.nodeId}
+          `;
+        }
+
+        await tx`
+          insert into private.node_lifecycle_events (
+            node_id,
+            actor_user_id,
+            action,
+            previous_status,
+            next_status,
+            credential_key_version
+          ) values (
+            ${input.nodeId},
+            ${input.ownerUserId}::uuid,
+            ${input.action},
+            ${input.expectedStatus},
+            ${input.nextStatus},
+            ${keyVersion}
+          )
+        `;
+        return true;
+      });
+    },
+
+    async rotateCredential(input: NodeCredentialRotationInput): Promise<boolean> {
+      return await sql.begin(async (tx) => {
+        const lockedRows = await tx`
+          select node_id, status
+          from public.nodes
+          where node_id = ${input.nodeId} and owner_user_id = ${input.ownerUserId}::uuid
+          for update
+        `;
+        const locked = rowRecord(lockedRows[0]);
+        if (!locked || locked.status !== input.expectedStatus || locked.status === 'revoked') {
+          return false;
+        }
+
+        const updatedCredential = await tx`
+          update private.node_credentials
+          set
+            credential_hmac = ${input.credentialHmac},
+            key_version = ${input.keyVersion},
+            created_at = now(),
+            expires_at = null,
+            revoked_at = null,
+            last_used_at = null
+          where node_id = ${input.nodeId}
+          returning node_id
+        `;
+        if (!rowRecord(updatedCredential[0])) return false;
+
+        await tx`
+          update public.nodes
+          set updated_at = now()
+          where node_id = ${input.nodeId}
+        `;
+
+        await tx`
+          insert into private.node_lifecycle_events (
+            node_id,
+            actor_user_id,
+            action,
+            previous_status,
+            next_status,
+            credential_key_version
+          ) values (
+            ${input.nodeId},
+            ${input.ownerUserId}::uuid,
+            'rotate',
+            ${input.expectedStatus},
+            ${input.expectedStatus},
+            ${input.keyVersion}
+          )
+        `;
+        return true;
       });
     },
   };
