@@ -1,0 +1,82 @@
+.corpus-shell { max-width: 1080px; margin: 0 auto; }
+.corpus-input-card {
+  margin: 0 12px 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(30, 41, 59, .55);
+  border: 1px solid rgba(148, 163, 184, .1);
+}
+.corpus-input-card label { display: grid; gap: 5px; }
+.corpus-input-card span,
+.corpus-kpis span {
+  color: #94a3b8;
+  font-size: .66rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.corpus-input-card strong { font-size: .8rem; overflow-wrap: anywhere; }
+.corpus-input-card input { color: #94a3b8; font-size: .72rem; }
+.corpus-input-card p { margin: 7px 0 0; color: #94a3b8; font-size: .72rem; }
+
+.corpus-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 12px 12px;
+}
+.corpus-kpis > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 11px;
+  border-radius: 13px;
+  background: rgba(15, 23, 42, .72);
+  border: 1px solid rgba(148, 163, 184, .1);
+}
+.corpus-kpis strong { font-size: 1.05rem; }
+.corpus-kpis small { color: #94a3b8; font-size: .67rem; }
+
+.corpus-grid {
+  display: grid;
+  gap: 8px;
+  margin: 0 12px 12px;
+}
+.corpus-card,
+.corpus-findings {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(30, 41, 59, .48);
+  border: 1px solid rgba(148, 163, 184, .1);
+}
+.corpus-card h3,
+.corpus-findings h3 { margin: 0 0 9px; font-size: .85rem; }
+.corpus-count-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, .08);
+  font-size: .74rem;
+}
+.corpus-count-row:last-child { border-bottom: 0; }
+.corpus-count-row span { color: #cbd5e1; }
+.corpus-count-row strong { font-variant-numeric: tabular-nums; }
+.corpus-empty { margin: 0; color: #94a3b8; font-size: .72rem; }
+
+.corpus-findings { margin: 0 12px 12px; display: grid; gap: 7px; }
+.corpus-finding {
+  padding: 9px 10px;
+  border-radius: 11px;
+  border: 1px solid rgba(148, 163, 184, .1);
+  background: rgba(15, 23, 42, .62);
+}
+.corpus-finding.warning { border-color: rgba(250, 204, 21, .24); background: rgba(113, 63, 18, .14); }
+.corpus-finding.info { border-color: rgba(56, 189, 248, .16); }
+.corpus-finding strong { display: block; font-size: .72rem; }
+.corpus-finding p { margin: 4px 0 0; color: #cbd5e1; font-size: .7rem; line-height: 1.45; }
+.corpus-method-note { margin: 0 12px 12px; }
+
+@media (min-width: 680px) {
+  .corpus-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .corpus-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

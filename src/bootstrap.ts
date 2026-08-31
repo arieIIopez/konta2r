@@ -30,6 +30,14 @@ async function bootstrap(): Promise<void> {
     window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
     return;
   }
+  if (diagnostics === 'corpus') {
+    await import('./diagnostics/corpus.css');
+    const { CorpusPanel } = await import('./diagnostics/corpusPanel');
+    const panel = new CorpusPanel();
+    panel.mount(mount);
+    window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
+    return;
+  }
 
   await import('./main');
   const { NodePanel } = await import('./node/nodePanel');
