@@ -1,3 +1,4 @@
+import type { CorpusSplit } from './corpusManifest';
 import type { DetectorBenchmarkReport } from './benchmarkReport';
 
 export type BenchmarkValidityStatus = 'valid' | 'provisional' | 'invalid';
@@ -8,6 +9,9 @@ export interface BenchmarkValidityFinding {
     | 'model_hash_missing'
     | 'annotation_hash_missing'
     | 'media_hash_missing'
+    | 'manifest_link_missing'
+    | 'selection_split_mismatch'
+    | 'final_evaluation_split_mismatch'
     | 'empty_benchmark'
     | 'presented_frame_coverage_incomplete'
     | 'seek_error_exceeds_limit';
@@ -26,7 +30,7 @@ export interface BenchmarkValidityAssessment {
   maxObservedSeekErrorMs: number | null;
 }
 
-export type BenchmarkValidityProfile = 'development' | 'selection';
+export type BenchmarkValidityProfile = 'development' | 'selection' | 'final_evaluation';
 
 export interface BenchmarkValidityPolicy {
   profile?: BenchmarkValidityProfile;
@@ -35,6 +39,7 @@ export interface BenchmarkValidityPolicy {
   requireAnnotationSha256?: boolean;
   requireMediaSha256WhenTimed?: boolean;
   requirePresentedFrameEvidenceWhenTimed?: boolean;
+  requireManifestLink?: boolean;
 }
 
 interface ResolvedPolicy {
@@ -44,6 +49,8 @@ interface ResolvedPolicy {
   requireAnnotationSha256: boolean;
   requireMediaSha256WhenTimed: boolean;
   requirePresentedFrameEvidenceWhenTimed: boolean;
+  requireManifestLink: boolean;
+  requiredSplit?: CorpusSplit;
 }
 
 const PROFILE_DEFAULTS: Record<BenchmarkValidityProfile, ResolvedPolicy> = {
@@ -54,6 +61,7 @@ const PROFILE_DEFAULTS: Record<BenchmarkValidityProfile, ResolvedPolicy> = {
     requireAnnotationSha256: false,
     requireMediaSha256WhenTimed: false,
     requirePresentedFrameEvidenceWhenTimed: false,
+    requireManifestLink: false,
   },
   selection: {
     profile: 'selection',
@@ -62,6 +70,18 @@ const PROFILE_DEFAULTS: Record<BenchmarkValidityProfile, ResolvedPolicy> = {
     requireAnnotationSha256: true,
     requireMediaSha256WhenTimed: true,
     requirePresentedFrameEvidenceWhenTimed: true,
+    requireManifestLink: true,
+    requiredSplit: 'validation',
+  },
+  final_evaluation: {
+    profile: 'final_evaluation',
+    maxSeekErrorMs: 50,
+    requireModelSha256: true,
+    requireAnnotationSha256: true,
+    requireMediaSha256WhenTimed: true,
+    requirePresentedFrameEvidenceWhenTimed: true,
+    requireManifestLink: true,
+    requiredSplit: 'held_out_test',
   },
 };
 
@@ -80,6 +100,8 @@ function resolvePolicy(policy: BenchmarkValidityPolicy): ResolvedPolicy {
     requireMediaSha256WhenTimed: policy.requireMediaSha256WhenTimed ?? defaults.requireMediaSha256WhenTimed,
     requirePresentedFrameEvidenceWhenTimed:
       policy.requirePresentedFrameEvidenceWhenTimed ?? defaults.requirePresentedFrameEvidenceWhenTimed,
+    requireManifestLink: policy.requireManifestLink ?? defaults.requireManifestLink,
+    ...(defaults.requiredSplit === undefined ? {} : { requiredSplit: defaults.requiredSplit }),
   };
 }
 
@@ -132,6 +154,30 @@ export function assessDetectorBenchmarkValidity(
       'annotation_hash_missing',
       'The frozen annotation corpus is not identified by a valid SHA-256 digest.',
     );
+  }
+
+  const manifest = report.corpus.manifest;
+  if (manifest === undefined || !hasSha256(manifest.sha256)) {
+    addRequirementFinding(
+      findings,
+      resolved.requireManifestLink,
+      'manifest_link_missing',
+      'The benchmark is not linked to a frozen corpus manifest identified by SHA-256.',
+    );
+  } else if (resolved.requiredSplit !== undefined && manifest.split !== resolved.requiredSplit) {
+    if (resolved.profile === 'selection') {
+      findings.push({
+        code: 'selection_split_mismatch',
+        severity: 'error',
+        message: `Model selection requires corpus split validation; report is linked to ${manifest.split}.`,
+      });
+    } else if (resolved.profile === 'final_evaluation') {
+      findings.push({
+        code: 'final_evaluation_split_mismatch',
+        severity: 'error',
+        message: `Final evaluation requires corpus split held_out_test; report is linked to ${manifest.split}.`,
+      });
+    }
   }
 
   const timedFrames = report.benchmark.frames.filter((frame) => frame.mediaTimeMs !== undefined);
