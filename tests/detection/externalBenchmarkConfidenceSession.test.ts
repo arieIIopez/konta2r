@@ -21,9 +21,7 @@ import type { BenchmarkFrameProvider } from '../../src/detection/streamingBenchm
 
 function probe(): OnnxModelProbeResult {
   return {
-    runtime: {
-      runtime: 'onnxruntime-web', runtimeVersion: '1.29.0', backend: 'wasm', executionProviders: ['wasm'],
-    },
+    runtime: { runtime: 'onnxruntime-web', runtimeVersion: '1.29.0', backend: 'wasm', executionProviders: ['wasm'] },
     webgpuAttempted: false,
     inputs: [{ name: 'image_tensor:0', kind: 'tensor', type: 'uint8', shape: [1, 300, 300, 3] }],
     outputs: [
@@ -39,22 +37,13 @@ function diagnostic(): OnnxCandidateProbeDiagnosticRecord {
   const candidate = OPENCV_SSD_MOBILENET_V2_COCO_2026JUL;
   const observed = probe();
   return buildOnnxCandidateProbeDiagnosticRecord(
-    buildOnnxProbeRecord(
-      candidate,
-      { sha256: candidate.artifact.sha256, sizeBytes: 4 },
-      observed,
-      new Date('2026-08-31T04:30:00.000Z'),
-    ),
+    buildOnnxProbeRecord(candidate, { sha256: candidate.artifact.sha256, sizeBytes: 4 }, observed, new Date('2026-08-31T04:30:00.000Z')),
     assessCandidateProbeCompatibility(candidate, observed),
   );
 }
 
 function artifact(): VerifiedOnnxArtifact {
-  return {
-    bytes: new Uint8Array([1, 2, 3, 4]),
-    sha256: OPENCV_SSD_MOBILENET_V2_COCO_2026JUL.artifact.sha256,
-    sizeBytes: 4,
-  };
+  return { bytes: new Uint8Array([1, 2, 3, 4]), sha256: OPENCV_SSD_MOBILENET_V2_COCO_2026JUL.artifact.sha256, sizeBytes: 4 };
 }
 
 class SweepSession implements OnnxSessionLike {
@@ -64,10 +53,7 @@ class SweepSession implements OnnxSessionLike {
   async run(_feeds: OnnxValueMap): Promise<OnnxValueMap> {
     this.runCount += 1;
     return {
-      'detection_boxes:0': this.tensor(new Float32Array([
-        0.1, 0.1, 0.5, 0.4,
-        0.1, 0.7, 0.5, 0.9,
-      ])),
+      'detection_boxes:0': this.tensor(new Float32Array([0.1, 0.1, 0.5, 0.4, 0.1, 0.7, 0.5, 0.9])),
       'detection_scores:0': this.tensor(new Float32Array([0.9, 0.2])),
       'detection_classes:0': this.tensor(new Float32Array([1, 1])),
       'num_detections:0': this.tensor(new Float32Array([2])),
@@ -86,15 +72,11 @@ class SweepFactory implements OnnxSessionFactory {
 }
 
 const sequence: AnnotatedBenchmarkSequence = {
-  schemaVersion: '1',
-  datasetId: 'confidence-corpus',
-  sequenceId: 'seq-1',
+  schemaVersion: '1', datasetId: 'confidence-corpus', sequenceId: 'seq-1',
   source: { annotationSha256: 'a'.repeat(64), mediaSha256: 'b'.repeat(64) },
   frames: [{
     frameId: 'f1', timestampMs: 1000, mediaTimeMs: 500, width: 1000, height: 500,
-    objects: [{
-      annotationId: 'person-1', className: 'person', bbox: { x: 100, y: 50, width: 300, height: 200 },
-    }],
+    objects: [{ annotationId: 'person-1', className: 'person', bbox: { x: 100, y: 50, width: 300, height: 200 } }],
   }],
 };
 
@@ -106,28 +88,18 @@ describe('external benchmark confidence analysis', () => {
   it('produces primary metrics and a confidence sweep from one inference pass', async () => {
     const factory = new SweepFactory();
     const result = await runExternalCandidateBenchmarkSession(
-      OPENCV_SSD_MOBILENET_V2_COCO_2026JUL,
-      artifact(),
-      diagnostic(),
-      sequence,
-      provider,
+      OPENCV_SSD_MOBILENET_V2_COCO_2026JUL, artifact(), diagnostic(), sequence, provider,
       {
-        runId: 'confidence-session',
-        device: { label: 'test-phone' },
+        runId: 'confidence-session', device: { label: 'test-phone' },
         detector: {
-          minConfidence: 0.05,
-          capabilities: { webgpu: false },
-          sessionFactory: factory,
+          minConfidence: 0.05, capabilities: { webgpu: false }, sessionFactory: factory,
           ssdRgbResize: () => new Uint8Array(300 * 300 * 3),
         },
         benchmark: {
           iouThreshold: 0.5,
-          confidence: {
-            operatingConfidenceThreshold: 0.5,
-            sweepThresholds: [0.1, 0.5, 0.95],
-          },
+          confidence: { operatingConfidenceThreshold: 0.5, sweepThresholds: [0.1, 0.5, 0.95] },
         },
-        validity: { profile: 'selection' },
+        validity: { profile: 'development' },
       },
     );
 
@@ -148,23 +120,15 @@ describe('external benchmark confidence analysis', () => {
   it('rejects a sweep below the adapter retention floor before creating an ONNX session', async () => {
     const factory = new SweepFactory();
     await expect(runExternalCandidateBenchmarkSession(
-      OPENCV_SSD_MOBILENET_V2_COCO_2026JUL,
-      artifact(),
-      diagnostic(),
-      sequence,
-      provider,
+      OPENCV_SSD_MOBILENET_V2_COCO_2026JUL, artifact(), diagnostic(), sequence, provider,
       {
-        runId: 'invalid-floor',
-        device: { label: 'test-phone' },
+        runId: 'invalid-floor', device: { label: 'test-phone' },
         detector: {
-          minConfidence: 0.5,
-          capabilities: { webgpu: false },
-          sessionFactory: factory,
+          minConfidence: 0.5, capabilities: { webgpu: false }, sessionFactory: factory,
           ssdRgbResize: () => new Uint8Array(300 * 300 * 3),
         },
-        benchmark: {
-          confidence: { operatingConfidenceThreshold: 0.5, sweepThresholds: [0.1, 0.5] },
-        },
+        benchmark: { confidence: { operatingConfidenceThreshold: 0.5, sweepThresholds: [0.1, 0.5] } },
+        validity: { profile: 'development' },
       },
     )).rejects.toThrow('filtered detections cannot be recovered');
     expect(factory.createCount).toBe(0);
