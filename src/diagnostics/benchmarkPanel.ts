@@ -1,5 +1,8 @@
 import { BrowserVideoBenchmarkFrameProvider } from '../detection/browserVideoFrameProvider';
-import { parseAnnotatedBenchmarkSequenceJson, type AnnotatedBenchmarkSequence } from '../detection/benchmarkDatasetParser';
+import {
+  parseAnnotatedBenchmarkSequenceJson,
+  type AnnotatedBenchmarkSequence,
+} from '../detection/benchmarkDatasetParser';
 import {
   detectorBenchmarkStrataCsv,
   detectorBenchmarkSummaryCsv,
@@ -260,6 +263,7 @@ export class BenchmarkPanel {
 
   private async handleFile(key: keyof LocalInputs, file: File | null): Promise<void> {
     if (this.running || this.destroyed) return;
+    if (key === 'video') this.revokeVideoUrl();
     this.inputs[key] = file;
     this.result = null;
     this.error = null;
@@ -379,6 +383,7 @@ export class BenchmarkPanel {
       this.error = error instanceof Error ? error.message : 'benchmark_run_failed';
       this.progress = 'La corrida se detuvo; no se exportó evidencia como válida.';
     } finally {
+      this.revokeVideoUrl();
       this.running = false;
       if (!this.destroyed) this.render();
     }
