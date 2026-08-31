@@ -136,4 +136,36 @@ describe('streaming annotated benchmark', () => {
     expect(released).toBe(2);
     expect(detector.disposed).toBe(true);
   });
+
+  it('records requested and presented media time and summarizes seek error', async () => {
+    const detector = new EmptyDetector();
+    const timedSequence: AnnotatedBenchmarkSequence = {
+      schemaVersion: '1',
+      datasetId: 'timed',
+      sequenceId: 'timed-sequence',
+      frames: [
+        { frameId: 'a', timestampMs: 1000, mediaTimeMs: 500, width: 640, height: 360, objects: [] },
+        { frameId: 'b', timestampMs: 1200, mediaTimeMs: 700, width: 640, height: 360, objects: [] },
+      ],
+    };
+    const actual = [508, 694];
+    let index = 0;
+    const provider: BenchmarkFrameProvider = {
+      async materialize() {
+        const actualMediaTimeMs = actual[index] ?? 0;
+        index += 1;
+        return { source, actualMediaTimeMs };
+      },
+    };
+
+    const result = await runStreamingAnnotatedBenchmark(detector, timedSequence, provider);
+
+    expect(result.frames[0]).toMatchObject({ mediaTimeMs: 500, actualMediaTimeMs: 508, seekErrorMs: 8 });
+    expect(result.frames[1]).toMatchObject({ mediaTimeMs: 700, actualMediaTimeMs: 694, seekErrorMs: -6 });
+    expect(result.mediaSeek).toEqual({
+      sampleCount: 2,
+      absoluteErrorMeanMs: 7,
+      absoluteErrorMaxMs: 8,
+    });
+  });
 });
