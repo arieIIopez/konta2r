@@ -64,7 +64,37 @@
   width: 100%;
   height: 100%;
   touch-action: none;
+  transition: opacity .16s ease;
+}
+.annotation-stage.is-exploring canvas {
+  pointer-events: none;
+  cursor: default;
+  opacity: .62;
+}
+.annotation-stage.is-annotating canvas {
+  pointer-events: auto;
   cursor: crosshair;
+  opacity: 1;
+}
+.annotation-mode-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  pointer-events: none;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, .78);
+  border: 1px solid rgba(148, 163, 184, .22);
+  color: #cbd5e1;
+  font-size: .67rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  backdrop-filter: blur(8px);
+}
+.annotation-stage.is-annotating .annotation-mode-badge {
+  color: #99f6e4;
+  border-color: rgba(94, 234, 212, .32);
 }
 .annotation-placeholder {
   position: absolute;
@@ -84,6 +114,17 @@
   padding-top: 9px;
 }
 .annotation-stage-toolbar .action { min-height: 39px; }
+.annotation-stage-wrap kbd {
+  display: inline-block;
+  min-width: 1.8em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid rgba(148, 163, 184, .25);
+  background: rgba(15, 23, 42, .88);
+  color: #e2e8f0;
+  font: .72em ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-align: center;
+}
 
 .annotation-sidebar {
   display: grid;
