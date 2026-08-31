@@ -24,6 +24,12 @@ describe('Supabase schema privacy policy', () => {
     expect(schemaSql).not.toMatch(/raw_(credential|token)|credential_secret|node_secret/i);
   });
 
+  it('binds idempotency to both node sequence and canonical payload identity', () => {
+    expect(schemaSql).toContain('payload_sha256 text not null');
+    expect(schemaSql).toContain("payload_sha256 ~ '^[a-f0-9]{64}$'");
+    expect(schemaSql).toContain('unique (node_id, sequence)');
+  });
+
   it('models segments rather than a precise node/home point', () => {
     expect(schemaSql).toContain('geometry extensions.geometry(LineString, 4326)');
     expect(schemaSql).toContain('segment_id text references public.segments');
