@@ -60,12 +60,12 @@ export interface PairedDetectorBenchmarkComparison {
   left: {
     runId: string;
     modelId: string;
-    modelSha256: string;
+    modelSha256: string | undefined;
   };
   right: {
     runId: string;
     modelId: string;
-    modelSha256: string;
+    modelSha256: string | undefined;
   };
   corpusGate: BenchmarkComparisonGate;
   operatingPoint: OperatingPointComparison;
@@ -113,6 +113,17 @@ function numericArraysEqual(left: readonly number[], right: readonly number[]): 
 
 function sortedClassNames(metrics: readonly DetectorClassMetrics[]): string[] {
   return metrics.map((metric) => metric.className).sort();
+}
+
+function modelIdentityFindings(left: DetectorBenchmarkReport, right: DetectorBenchmarkReport): ComparabilityFinding[] {
+  const findings: ComparabilityFinding[] = [];
+  if (left.benchmark.detector.model.modelSha256 === undefined) {
+    findings.push(warning('left_model_hash_unproven', 'El reporte izquierdo no identifica el checkpoint mediante SHA-256.'));
+  }
+  if (right.benchmark.detector.model.modelSha256 === undefined) {
+    findings.push(warning('right_model_hash_unproven', 'El reporte derecho no identifica el checkpoint mediante SHA-256.'));
+  }
+  return findings;
 }
 
 function sameScaleThresholds(left: DetectorBenchmarkReport, right: DetectorBenchmarkReport): boolean {
@@ -362,7 +373,8 @@ export function compareDetectorBenchmarkReports(
   left: DetectorBenchmarkReport,
   right: DetectorBenchmarkReport,
 ): PairedDetectorBenchmarkComparison {
-  const sharedCorpusFindings = corpusFindings(left, right);
+  const identityFindings = modelIdentityFindings(left, right);
+  const sharedCorpusFindings = [...identityFindings, ...corpusFindings(left, right)];
   const corpusGate = gate(sharedCorpusFindings);
 
   const operatingFindings = [...sharedCorpusFindings, ...operatingMetricFindings(left, right)];
