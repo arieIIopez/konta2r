@@ -1,6 +1,10 @@
 import { NODE_PROFILE_SETTINGS, type NodePerformanceProfile } from './deviceProfile';
 import { NodeRuntimeController, type NodeRuntimeSnapshot } from './runtimeController';
 import type { PwaRuntimeState } from '../pwa/register';
+import type {
+  NodeOperationalStatusSnapshot,
+  NodeOperationalStatusSource,
+} from './operationalStatus.ts';
 
 function formatBytes(value: number | undefined): string {
   if (value === undefined) return '—';
@@ -19,14 +23,73 @@ function setText(root: HTMLElement, selector: string, value: string): void {
   if (element) element.textContent = value;
 }
 
+interface CommunityReadinessPresentation {
+  title: string;
+  detail: string;
+  tone: 'neutral' | 'success' | 'warning' | 'blocked';
+}
+
+function communityPresentation(snapshot: NodeOperationalStatusSnapshot): CommunityReadinessPresentation {
+  switch (snapshot.readiness) {
+    case 'unbound':
+      return {
+        title: 'no configurado',
+        detail: 'Este dispositivo todavía no tiene un binding local de nodo Community.',
+        tone: 'neutral',
+      };
+    case 'provisioning':
+      return {
+        title: 'provisioning',
+        detail: 'La credencial está disponible localmente; falta activación humana del nodo.',
+        tone: 'warning',
+      };
+    case 'paused':
+      return {
+        title: 'pausado',
+        detail: 'Último estado conocido: pausado. El backend vuelve a validar el estado en cada envío.',
+        tone: 'warning',
+      };
+    case 'credential_missing':
+      return {
+        title: 'recuperación requerida',
+        detail: 'Existe un binding local, pero falta la credencial cifrada. Se requiere rotación con sesión humana.',
+        tone: 'blocked',
+      };
+    case 'revoked':
+      return {
+        title: 'revocado',
+        detail: 'Último estado conocido: revocado. Es terminal; reutilizar el dispositivo requiere un nodo nuevo.',
+        tone: 'blocked',
+      };
+    case 'ready':
+      return {
+        title: 'preparado localmente',
+        detail: 'Binding activo y credencial disponible. El backend sigue siendo la autoridad al recibir cada batch.',
+        tone: 'success',
+      };
+  }
+}
+
 export class NodePanel {
   private readonly runtime = new NodeRuntimeController();
   private readonly pwa: PwaRuntimeState;
+  private readonly operational: NodeOperationalStatusSource;
   private root: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
+  private operationalTimer: number | null = null;
+  private operationalGeneration = 0;
 
-  constructor(pwa: PwaRuntimeState) {
+  private readonly handleWindowFocus = (): void => {
+    void this.refreshOperationalStatus();
+  };
+
+  private readonly handleVisibilityChange = (): void => {
+    if (document.visibilityState === 'visible') void this.refreshOperationalStatus();
+  };
+
+  constructor(pwa: PwaRuntimeState, operational: NodeOperationalStatusSource) {
     this.pwa = pwa;
+    this.operational = operational;
   }
 
   mount(root: HTMLElement): void {
@@ -39,7 +102,23 @@ export class NodePanel {
             <h2>Operación local</h2>
             <p>La cámara permanece en este dispositivo. El modo Community usa agregados.</p>
           </div>
-          <span class="status-pill" data-node-status>○ nodo detenido</span>
+          <span class="status-pill" data-node-status>○ captura detenida</span>
+        </div>
+        <div class="node-community-card" data-community-card data-community-tone="neutral">
+          <div class="node-community-head">
+            <div>
+              <span>Identidad Community</span>
+              <strong data-community-state>leyendo estado local…</strong>
+            </div>
+            <small data-community-authority>El backend revalida identidad y estado en cada envío.</small>
+          </div>
+          <p data-community-detail>Consultando binding, vault y cola local.</p>
+          <div class="node-community-facts">
+            <div><span>Nodo</span><strong data-community-node>—</strong></div>
+            <div><span>Segmento</span><strong data-community-segment>—</strong></div>
+            <div><span>Credencial</span><strong data-community-credential>—</strong></div>
+            <div><span>Cola</span><strong data-community-queue>—</strong></div>
+          </div>
         </div>
         <div class="node-runtime-grid">
           <div class="node-camera-wrap">
@@ -61,7 +140,7 @@ export class NodePanel {
           </div>
         </div>
         <div class="node-runtime-controls">
-          <button class="action primary" data-start>Iniciar nodo</button>
+          <button class="action primary" data-start>Iniciar captura</button>
           <button class="action" data-stop>Detener</button>
           <label class="profile-control">Perfil
             <select data-profile-select>
@@ -91,12 +170,73 @@ export class NodePanel {
     this.unsubscribe?.();
     this.unsubscribe = this.runtime.subscribe((snapshot) => this.update(snapshot));
     void this.runtime.inspectStorage(false);
+    void this.refreshOperationalStatus();
+
+    window.addEventListener('focus', this.handleWindowFocus);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    if (this.operationalTimer !== null) window.clearInterval(this.operationalTimer);
+    this.operationalTimer = window.setInterval(() => void this.refreshOperationalStatus(), 30_000);
   }
 
   destroy(): void {
     this.unsubscribe?.();
     this.runtime.destroy();
+    window.removeEventListener('focus', this.handleWindowFocus);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    if (this.operationalTimer !== null) {
+      window.clearInterval(this.operationalTimer);
+      this.operationalTimer = null;
+    }
+    this.operationalGeneration += 1;
     this.root = null;
+  }
+
+  private async refreshOperationalStatus(): Promise<void> {
+    const generation = ++this.operationalGeneration;
+    try {
+      const snapshot = await this.operational.snapshot();
+      if (generation !== this.operationalGeneration || !this.root) return;
+      this.updateOperational(snapshot);
+    } catch {
+      if (generation !== this.operationalGeneration || !this.root) return;
+      const root = this.root;
+      const card = root.querySelector<HTMLElement>('[data-community-card]');
+      if (card) card.dataset.communityTone = 'warning';
+      setText(root, '[data-community-state]', 'estado local no disponible');
+      setText(root, '[data-community-detail]', 'No fue posible leer binding, vault o cola. La captura local sigue siendo independiente.');
+      setText(root, '[data-community-node]', '—');
+      setText(root, '[data-community-segment]', '—');
+      setText(root, '[data-community-credential]', '—');
+      setText(root, '[data-community-queue]', '—');
+    }
+  }
+
+  private updateOperational(snapshot: NodeOperationalStatusSnapshot): void {
+    const root = this.root;
+    if (!root) return;
+    const presentation = communityPresentation(snapshot);
+    const card = root.querySelector<HTMLElement>('[data-community-card]');
+    if (card) card.dataset.communityTone = presentation.tone;
+    setText(root, '[data-community-state]', presentation.title);
+    setText(root, '[data-community-detail]', presentation.detail);
+    setText(root, '[data-community-node]', snapshot.binding?.nodeId ?? 'sin binding');
+    setText(root, '[data-community-segment]', snapshot.binding?.segmentId ?? '—');
+    setText(
+      root,
+      '[data-community-credential]',
+      snapshot.credentialAvailable
+        ? `disponible${snapshot.binding?.credentialVersion ? ` · v${snapshot.binding.credentialVersion}` : ''}`
+        : 'no disponible',
+    );
+    const deadLetter = snapshot.deadLetter > 0 ? ` · ${snapshot.deadLetter} requieren revisión` : '';
+    setText(root, '[data-community-queue]', `${snapshot.pending} pendientes${deadLetter}`);
+    setText(
+      root,
+      '[data-community-authority]',
+      snapshot.binding
+        ? `Último estado conocido: ${snapshot.binding.status}. El backend revalida cada envío.`
+        : 'El backend revalida identidad y estado en cada envío.',
+    );
   }
 
   private update(snapshot: NodeRuntimeSnapshot): void {
@@ -105,7 +245,7 @@ export class NodePanel {
     const profileSettings = NODE_PROFILE_SETTINGS[snapshot.profile];
     const status = root.querySelector<HTMLElement>('[data-node-status]');
     if (status) {
-      status.textContent = snapshot.running ? '● nodo activo' : '○ nodo detenido';
+      status.textContent = snapshot.running ? '● captura local activa' : '○ captura detenida';
       status.classList.toggle('runtime-on', snapshot.running);
     }
 
@@ -142,7 +282,7 @@ export class NodePanel {
 
     const placeholder = root.querySelector<HTMLElement>('[data-camera-placeholder]');
     placeholder?.classList.toggle('hidden', snapshot.camera.active);
-    setText(root, '[data-camera-title]', snapshot.busy ? 'Preparando nodo…' : 'Cámara local detenida');
+    setText(root, '[data-camera-title]', snapshot.busy ? 'Preparando captura…' : 'Cámara local detenida');
     setText(root, '[data-camera-help]', snapshot.secureContext
       ? 'La imagen no sale del dispositivo.'
       : 'Se requiere HTTPS o localhost para acceder a cámara y PWA.');
