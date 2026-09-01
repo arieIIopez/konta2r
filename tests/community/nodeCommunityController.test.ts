@@ -172,7 +172,7 @@ describe('node Community controller', () => {
     expect(runtime.snapshot().error).toMatch(/sign in with google/i);
   });
 
-  it('provisions an active node and reports upload identity readiness without exposing the credential', async () => {
+  it('provisions an active node and redacts its sensor credential from UI state', async () => {
     const human = auth({ authenticated: true });
     const node = provisioner();
     const runtime = await refreshed(createNodeCommunityController({
@@ -186,7 +186,9 @@ describe('node Community controller', () => {
 
     expect(snapshot.identity?.status).toBe('active');
     expect(snapshot.sensorReady).toBe(true);
-    expect('credential' in snapshot).toBe(false);
+    expect(snapshot.identity).toBeDefined();
+    expect('credential' in (snapshot.identity ?? {})).toBe(false);
+    expect(await runtime.activeCredential()).toBeDefined();
   });
 
   it('exposes the Community sender that is already bound to the provisioner credential provider', () => {
