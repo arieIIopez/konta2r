@@ -1,6 +1,8 @@
-import { NODE_PROFILE_SETTINGS, type NodePerformanceProfile } from './deviceProfile';
-import { NodeRuntimeController, type NodeRuntimeSnapshot } from './runtimeController';
+import type { NodeCommunityRuntime } from '../community/nodeCommunityController';
 import type { PwaRuntimeState } from '../pwa/register';
+import { NODE_PROFILE_SETTINGS, type NodePerformanceProfile } from './deviceProfile';
+import { NodeCommunityPanel } from './nodeCommunityPanel';
+import { NodeRuntimeController, type NodeRuntimeSnapshot } from './runtimeController';
 
 function formatBytes(value: number | undefined): string {
   if (value === undefined) return '—';
@@ -22,11 +24,15 @@ function setText(root: HTMLElement, selector: string, value: string): void {
 export class NodePanel {
   private readonly runtime = new NodeRuntimeController();
   private readonly pwa: PwaRuntimeState;
+  private readonly community: NodeCommunityRuntime;
+  private readonly communityPanel: NodeCommunityPanel;
   private root: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
 
-  constructor(pwa: PwaRuntimeState) {
+  constructor(pwa: PwaRuntimeState, community: NodeCommunityRuntime) {
     this.pwa = pwa;
+    this.community = community;
+    this.communityPanel = new NodeCommunityPanel(community);
   }
 
   mount(root: HTMLElement): void {
@@ -72,6 +78,7 @@ export class NodePanel {
           </label>
           <button class="action" data-persist>Proteger almacenamiento</button>
         </div>
+        <div class="community-slot" data-community-mount></div>
         <p class="runtime-note" data-hints></p>
         <p class="runtime-error hidden" data-error></p>
       </section>`;
@@ -79,6 +86,10 @@ export class NodePanel {
     const video = root.querySelector<HTMLVideoElement>('#node-camera');
     if (!video) throw new Error('Missing node camera surface');
     this.runtime.attachVideo(video);
+
+    const communityMount = root.querySelector<HTMLElement>('[data-community-mount]');
+    if (!communityMount) throw new Error('Missing Community node surface');
+    this.communityPanel.mount(communityMount);
 
     root.querySelector<HTMLButtonElement>('[data-start]')?.addEventListener('click', () => void this.runtime.start());
     root.querySelector<HTMLButtonElement>('[data-stop]')?.addEventListener('click', () => void this.runtime.stop());
@@ -95,6 +106,8 @@ export class NodePanel {
 
   destroy(): void {
     this.unsubscribe?.();
+    this.communityPanel.destroy();
+    this.community.destroy();
     this.runtime.destroy();
     this.root = null;
   }
