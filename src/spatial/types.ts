@@ -1,4 +1,4 @@
-import type { EntityType, Point2D } from '../core/types';
+import type { EntityType, Point2D } from '../core/types.ts';
 
 export type Matrix3 = readonly [
   number, number, number,

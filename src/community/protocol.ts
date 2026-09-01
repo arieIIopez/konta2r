@@ -1,6 +1,6 @@
-import type { EntityType } from '../core/types';
-import type { PublicSpatialAggregate } from '../spatial/publicAggregation';
-import type { NodeQualityScore } from './quality';
+import type { EntityType } from '../core/types.ts';
+import type { PublicSpatialAggregate } from '../spatial/publicAggregation.ts';
+import type { NodeQualityScore } from './quality.ts';
 
 export type CommunityDirection = 'A_TO_B' | 'B_TO_A' | 'UNSPECIFIED';
 

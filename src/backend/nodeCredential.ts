@@ -4,16 +4,20 @@ const TOKEN_ENTROPY_BYTES = 32;
 const NODE_ID_ENTROPY_BYTES = 12;
 const MINIMUM_PEPPER_BYTES = 32;
 
+export interface NodeCredentialMaterial {
+  /** Returned once to the node. Never persist this raw value server-side. */
+  credential: string;
+  credentialHmac: string;
+  keyVersion: number;
+}
+
 export interface NodeCredentialRecordMaterial {
   nodeId: string;
   credentialHmac: string;
   keyVersion: number;
 }
 
-export interface NodeEnrollmentMaterial extends NodeCredentialRecordMaterial {
-  /** Returned once to the enrolling node. Never persist this raw value server-side. */
-  credential: string;
-}
+export interface NodeEnrollmentMaterial extends NodeCredentialRecordMaterial, NodeCredentialMaterial {}
 
 export type SecureRandomFill = (bytes: Uint8Array<ArrayBuffer>) => void;
 
@@ -90,6 +94,14 @@ function fillEntropy(length: number, randomFill: SecureRandomFill): Uint8Array<A
   return bytes;
 }
 
+function validatedKeyVersion(value: number | undefined): number {
+  const keyVersion = value ?? 1;
+  if (!Number.isInteger(keyVersion) || keyVersion < 1 || keyVersion > 32_767) {
+    throw new Error('Node credential keyVersion must be an integer within 1..32767');
+  }
+  return keyVersion;
+}
+
 export function isValidNodeId(value: string): boolean {
   return /^node_[A-Za-z0-9_-]{6,80}$/.test(value);
 }
@@ -141,6 +153,26 @@ export async function verifyNodeCredentialHmac(
   return crypto.subtle.verify('HMAC', key, signature, credentialBytes(credential));
 }
 
+/**
+ * Generates only sensor credential material. This is the primitive used for
+ * rotation so an existing node keeps its pseudonymous nodeId unchanged.
+ */
+export async function createNodeCredentialMaterial(
+  pepper: string | Uint8Array,
+  options: {
+    randomFill?: SecureRandomFill;
+    keyVersion?: number;
+  } = {},
+): Promise<NodeCredentialMaterial> {
+  const keyVersion = validatedKeyVersion(options.keyVersion);
+  const credential = generateNodeCredential(options.randomFill ?? defaultRandomFill);
+  return {
+    credential,
+    credentialHmac: await computeNodeCredentialHmac(credential, pepper),
+    keyVersion,
+  };
+}
+
 export async function createNodeEnrollmentMaterial(
   pepper: string | Uint8Array,
   options: {
@@ -148,17 +180,14 @@ export async function createNodeEnrollmentMaterial(
     keyVersion?: number;
   } = {},
 ): Promise<NodeEnrollmentMaterial> {
-  const keyVersion = options.keyVersion ?? 1;
-  if (!Number.isInteger(keyVersion) || keyVersion < 1 || keyVersion > 32_767) {
-    throw new Error('Node credential keyVersion must be an integer within 1..32767');
-  }
   const randomFill = options.randomFill ?? defaultRandomFill;
   const nodeId = generatePseudonymousNodeId(randomFill);
-  const credential = generateNodeCredential(randomFill);
+  const credentialMaterial = await createNodeCredentialMaterial(pepper, {
+    randomFill,
+    ...(options.keyVersion === undefined ? {} : { keyVersion: options.keyVersion }),
+  });
   return {
     nodeId,
-    credential,
-    credentialHmac: await computeNodeCredentialHmac(credential, pepper),
-    keyVersion,
+    ...credentialMaterial,
   };
 }
