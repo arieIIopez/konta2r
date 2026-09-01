@@ -2,10 +2,20 @@ import type { CommunitySender } from './outbox';
 import type { ActiveNodeCredential, LocalNodeIdentity, NodeProvisioner } from './nodeProvisioning';
 import type { HumanAuthClient, HumanAuthSnapshot } from '../auth/supabaseBrowser';
 
+export interface NodeCommunityIdentity {
+  nodeId: string;
+  label: string;
+  segmentId: string;
+  status: LocalNodeIdentity['status'];
+  credentialVersion: number;
+  enrolledAtIso: string;
+  updatedAtIso: string;
+}
+
 export interface NodeCommunitySnapshot {
   configured: boolean;
   human: HumanAuthSnapshot;
-  identity?: LocalNodeIdentity;
+  identity?: NodeCommunityIdentity;
   sensorReady: boolean;
   busy: boolean;
   error?: string;
@@ -39,6 +49,18 @@ const EMPTY_HUMAN: HumanAuthSnapshot = { authenticated: false };
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function redactIdentity(identity: LocalNodeIdentity): NodeCommunityIdentity {
+  return {
+    nodeId: identity.nodeId,
+    label: identity.label,
+    segmentId: identity.segmentId,
+    status: identity.status,
+    credentialVersion: identity.credentialVersion,
+    enrolledAtIso: identity.enrolledAtIso,
+    updatedAtIso: identity.updatedAtIso,
+  };
 }
 
 export function createNodeCommunityController(options: NodeCommunityControllerOptions): NodeCommunityRuntime {
@@ -98,7 +120,7 @@ export function createNodeCommunityController(options: NodeCommunityControllerOp
       sensorReady: credential !== undefined,
       busy: state.busy,
     };
-    if (identity) next.identity = identity;
+    if (identity) next.identity = redactIdentity(identity);
     if (state.error) next.error = state.error;
     replace(next);
   }
