@@ -232,8 +232,8 @@ describe('community ingestion trust boundary', () => {
     const tooLarge = await processCommunityIngestion({
       method: 'POST', headers: headers(envelope), bodyText: body(envelope),
     }, acceptingVerifier(), store, { nowMs: NOW_MS, maxBodyBytes: 1024 });
-    expect(tooLarge.ok).toBe(true);
-    expect(store.batches).toHaveLength(1);
+    expect(tooLarge).toEqual({ ok: false, statusCode: 413, code: 'payload_too_large' });
+    expect(store.batches).toHaveLength(0);
   });
 });
 
