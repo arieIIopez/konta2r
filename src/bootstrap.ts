@@ -64,8 +64,16 @@ async function bootstrap(): Promise<void> {
   }
 
   await import('./main');
-  const { NodePanel } = await import('./node/nodePanel');
-  const panel = new NodePanel(pwa);
+  const [{ NodePanel }, { createBrowserNodeCommunity }] = await Promise.all([
+    import('./node/nodePanel'),
+    import('./community/browserNodeCommunity'),
+  ]);
+  const community = createBrowserNodeCommunity({
+    projectUrl: import.meta.env.VITE_SUPABASE_URL,
+    publishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    appOrigin: window.location.origin,
+  });
+  const panel = new NodePanel(pwa, community);
   panel.mount(mount);
   window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
 }
