@@ -67,6 +67,18 @@ function timestamp(nowIso: () => string): string {
   return value;
 }
 
+function revokedIdentity(identity: LocalNodeIdentity, updatedAtIso: string): LocalNodeIdentity {
+  return {
+    nodeId: identity.nodeId,
+    label: identity.label,
+    segmentId: identity.segmentId,
+    status: 'revoked',
+    credentialVersion: identity.credentialVersion,
+    enrolledAtIso: identity.enrolledAtIso,
+    updatedAtIso,
+  };
+}
+
 export function createNodeProvisioner(options: NodeProvisionerOptions): NodeProvisioner {
   const nowIso = options.nowIso ?? (() => new Date().toISOString());
 
@@ -90,46 +102,49 @@ export function createNodeProvisioner(options: NodeProvisionerOptions): NodeProv
     return updated;
   }
 
+  async function enroll(input: { label: string; segmentId: string }): Promise<LocalNodeIdentity> {
+    const existing = await options.store.get();
+    if (existing && existing.status !== 'revoked') {
+      throw new Error('This device is already enrolled as a Konta2r node');
+    }
+
+    const result = await options.admin.enroll(input);
+    assertEnrollment(result);
+    const now = timestamp(nowIso);
+    const identity: LocalNodeIdentity = {
+      nodeId: result.node.nodeId,
+      label: result.node.label,
+      segmentId: result.node.segmentId,
+      status: result.node.status,
+      credential: result.credential,
+      credentialVersion: result.credentialVersion,
+      enrolledAtIso: now,
+      updatedAtIso: now,
+    };
+    await options.store.put(identity);
+    return identity;
+  }
+
+  async function activate(): Promise<LocalNodeIdentity> {
+    const identity = await requireIdentity();
+    if (identity.status === 'revoked') throw new Error('Revoked nodes cannot be activated');
+    if (!identity.credential || !isValidNodeCredential(identity.credential)) {
+      throw new Error('Local node credential is unavailable');
+    }
+    const result = await options.admin.lifecycle(identity.nodeId, 'activate');
+    return saveStatus(identity, result);
+  }
+
   return {
     identity: () => options.store.get(),
-
-    async enroll(input): Promise<LocalNodeIdentity> {
-      const existing = await options.store.get();
-      if (existing && existing.status !== 'revoked') {
-        throw new Error('This device is already enrolled as a Konta2r node');
-      }
-
-      const result = await options.admin.enroll(input);
-      assertEnrollment(result);
-      const now = timestamp(nowIso);
-      const identity: LocalNodeIdentity = {
-        nodeId: result.node.nodeId,
-        label: result.node.label,
-        segmentId: result.node.segmentId,
-        status: result.node.status,
-        credential: result.credential,
-        credentialVersion: result.credentialVersion,
-        enrolledAtIso: now,
-        updatedAtIso: now,
-      };
-      await options.store.put(identity);
-      return identity;
-    },
+    enroll,
 
     async provision(input): Promise<LocalNodeIdentity> {
-      await this.enroll(input);
-      return this.activate();
+      await enroll(input);
+      return activate();
     },
 
-    async activate(): Promise<LocalNodeIdentity> {
-      const identity = await requireIdentity();
-      if (identity.status === 'revoked') throw new Error('Revoked nodes cannot be activated');
-      if (!identity.credential || !isValidNodeCredential(identity.credential)) {
-        throw new Error('Local node credential is unavailable');
-      }
-      const result = await options.admin.lifecycle(identity.nodeId, 'activate');
-      return saveStatus(identity, result);
-    },
+    activate,
 
     async pause(): Promise<LocalNodeIdentity> {
       const identity = await requireIdentity();
@@ -143,17 +158,19 @@ export function createNodeProvisioner(options: NodeProvisionerOptions): NodeProv
       if (identity.status === 'revoked') throw new Error('Revoked nodes cannot rotate credentials');
       const result = await options.admin.lifecycle(identity.nodeId, 'rotate');
       assertLifecycle(identity, result);
-      if (!result.credential || !isValidNodeCredential(result.credential)) {
+      const credential = result.credential;
+      const credentialVersion = result.credentialVersion;
+      if (!credential || !isValidNodeCredential(credential)) {
         throw new Error('Credential rotation did not return a valid one-time credential');
       }
-      if (!Number.isInteger(result.credentialVersion) || (result.credentialVersion ?? 0) < 1) {
+      if (typeof credentialVersion !== 'number' || !Number.isInteger(credentialVersion) || credentialVersion < 1) {
         throw new Error('Credential rotation returned an invalid credential version');
       }
       const updated: LocalNodeIdentity = {
         ...identity,
         status: result.node.status,
-        credential: result.credential,
-        credentialVersion: result.credentialVersion,
+        credential,
+        credentialVersion,
         updatedAtIso: timestamp(nowIso),
       };
       await options.store.put(updated);
@@ -166,12 +183,7 @@ export function createNodeProvisioner(options: NodeProvisionerOptions): NodeProv
       const result = await options.admin.lifecycle(identity.nodeId, 'revoke');
       assertLifecycle(identity, result);
       if (result.node.status !== 'revoked') throw new Error('Revocation did not produce terminal revoked state');
-      const updated: LocalNodeIdentity = {
-        ...identity,
-        status: 'revoked',
-        credential: undefined,
-        updatedAtIso: timestamp(nowIso),
-      };
+      const updated = revokedIdentity(identity, timestamp(nowIso));
       await options.store.put(updated);
       return updated;
     },
