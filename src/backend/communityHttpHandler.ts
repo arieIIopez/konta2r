@@ -10,6 +10,7 @@ const ALLOWED_REQUEST_HEADERS = [
   'apikey',
   'content-type',
   'idempotency-key',
+  'x-client-info',
   'x-konta2r-schema',
   'x-konta2r-methodology',
 ].join(', ');
@@ -117,9 +118,13 @@ export function createCommunityHttpHandler(
       return jsonResponse(403, { error: 'origin_not_allowed' }, undefined, cors);
     }
 
-    if (request.method.toUpperCase() === 'OPTIONS') {
+    const method = request.method.toUpperCase();
+    if (method === 'OPTIONS') {
       const headers = corsHeaders(origin, cors);
       return new Response(null, { status: 204, headers });
+    }
+    if (method !== 'POST') {
+      return jsonResponse(405, { error: 'method_not_allowed' }, origin, cors);
     }
 
     if (contentLengthTooLarge(request.headers, maxBodyBytes)) {
@@ -136,7 +141,7 @@ export function createCommunityHttpHandler(
 
     try {
       const result = await processCommunityIngestion({
-        method: request.method,
+        method,
         headers: request.headers,
         bodyText,
       }, verifier, store, {
