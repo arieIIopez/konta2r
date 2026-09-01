@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createNodeAdminClient, NodeAdminHttpError } from '../../src/community/nodeAdminClient';
+import { createNodeAdminClient } from '../../src/community/nodeAdminClient';
 
 const PROJECT_URL = 'https://example-project.supabase.co';
 const PUBLISHABLE_KEY = 'sb_publishable_browser-safe';
@@ -84,7 +84,7 @@ describe('node administration HTTP client', () => {
       fetchImpl: (async () => response({ code: 'node_lifecycle_conflict' }, 409)) as typeof fetch,
     });
 
-    await expect(client.lifecycle(NODE_ID, 'pause')).rejects.toMatchObject<NodeAdminHttpError>({
+    await expect(client.lifecycle(NODE_ID, 'pause')).rejects.toMatchObject({
       status: 409,
       code: 'node_lifecycle_conflict',
     });
