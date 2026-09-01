@@ -54,14 +54,37 @@ export function createNodeCommunityController(options: NodeCommunityControllerOp
     for (const listener of listeners) listener(state);
   }
 
-  function patch(value: Partial<NodeCommunitySnapshot>): void {
-    state = { ...state, ...value };
+  function replace(next: NodeCommunitySnapshot): void {
+    state = next;
     emit();
+  }
+
+  function setError(error: unknown): void {
+    replace({ ...state, busy: false, error: message(error) });
+  }
+
+  function setBusy(): void {
+    const next = { ...state, busy: true };
+    delete next.error;
+    replace(next);
+  }
+
+  function clearBusy(): void {
+    const next = { ...state, busy: false };
+    delete next.error;
+    replace(next);
   }
 
   async function load(): Promise<void> {
     if (!options.configured || !options.auth || !options.provisioner) {
-      patch({ human: EMPTY_HUMAN, sensorReady: false });
+      const next: NodeCommunitySnapshot = {
+        configured: false,
+        human: EMPTY_HUMAN,
+        sensorReady: false,
+        busy: state.busy,
+      };
+      if (state.error) next.error = state.error;
+      replace(next);
       return;
     }
     const [human, identity, credential] = await Promise.all([
@@ -69,22 +92,26 @@ export function createNodeCommunityController(options: NodeCommunityControllerOp
       options.provisioner.identity(),
       options.provisioner.activeCredential(),
     ]);
-    patch({
+    const next: NodeCommunitySnapshot = {
+      configured: true,
       human,
-      ...(identity ? { identity } : { identity: undefined }),
       sensorReady: credential !== undefined,
-    });
+      busy: state.busy,
+    };
+    if (identity) next.identity = identity;
+    if (state.error) next.error = state.error;
+    replace(next);
   }
 
   async function action(operation: () => Promise<void>): Promise<void> {
     if (state.busy) return;
-    patch({ busy: true, error: undefined });
+    setBusy();
     try {
       await operation();
       await load();
-      patch({ busy: false, error: undefined });
+      clearBusy();
     } catch (error) {
-      patch({ busy: false, error: message(error) });
+      setError(error);
     }
   }
 
@@ -104,7 +131,7 @@ export function createNodeCommunityController(options: NodeCommunityControllerOp
   }
 
   const unsubscribeAuth = options.auth?.subscribe(() => {
-    void load().catch((error) => patch({ error: message(error) }));
+    void load().catch(setError);
   });
 
   return {
