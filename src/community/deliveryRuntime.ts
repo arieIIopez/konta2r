@@ -29,6 +29,11 @@ export interface CommunityBatchDraft {
   segmentSourceVersion?: string;
 }
 
+export interface CommunityEnqueueOptions {
+  /** Local-only stable key used to make bucket→outbox publication crash-idempotent. */
+  publicationKey?: string;
+}
+
 export interface CommunityDeliveryRuntimeOptions {
   endpoint: string;
   activeNode: () => Promise<ActiveNodeCredential | undefined>;
@@ -43,7 +48,7 @@ export interface CommunityDeliveryFlushResult extends OutboxFlushResult {
 }
 
 export interface CommunityDeliveryRuntime {
-  enqueue(draft: CommunityBatchDraft): Promise<CommunityOutboxItem>;
+  enqueue(draft: CommunityBatchDraft, options?: CommunityEnqueueOptions): Promise<CommunityOutboxItem>;
   flush(options?: OutboxFlushOptions): Promise<CommunityDeliveryFlushResult>;
 }
 
@@ -97,11 +102,13 @@ export function createCommunityDeliveryRuntime(
   }
 
   return {
-    async enqueue(draft): Promise<CommunityOutboxItem> {
+    async enqueue(draft, enqueueOptions = {}): Promise<CommunityOutboxItem> {
       const active = await options.activeNode();
       if (!active) throw new Error('An active Konta2r node is required to enqueue Community data');
       const generatedAtMs = validNow(nowMs);
-      const sequence = await options.sequences.next(active.nodeId);
+      const sequence = enqueueOptions.publicationKey === undefined
+        ? await options.sequences.next(active.nodeId)
+        : await options.sequences.reserve(active.nodeId, enqueueOptions.publicationKey);
       const observedSegment: ObservedSegmentRef = {
         segmentId: active.segmentId,
         source: draft.segmentSource ?? 'konta2r',
