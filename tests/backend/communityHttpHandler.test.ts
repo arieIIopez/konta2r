@@ -65,7 +65,12 @@ function envelope(): CommunityUploadEnvelope {
 }
 
 function request(
-  overrides: Partial<{ method: string; origin: string | null; body: string; headers: Record<string, string> }> = {},
+  overrides: Partial<{
+    method: string;
+    origin: string | null;
+    body: string;
+    headers: Record<string, string>;
+  }> = {},
 ): CommunityHttpRequestLike {
   const payload = envelope();
   const body = overrides.body ?? JSON.stringify(payload);
@@ -86,12 +91,13 @@ function request(
 }
 
 function verifier(): NodeCredentialVerifier {
-  return async (nodeId, credential) => ({
-    authorized: credential === CREDENTIAL,
-    ...(credential === CREDENTIAL
-      ? { node: { nodeId, segmentId: 'osm_way_1:segment_2' } }
-      : {}),
-  } as Awaited<ReturnType<NodeCredentialVerifier>>);
+  return async (nodeId, credential) => {
+    if (credential !== CREDENTIAL) return { authorized: false };
+    return {
+      authorized: true,
+      node: { nodeId, segmentId: 'osm_way_1:segment_2' },
+    };
+  };
 }
 
 class Store implements CommunityIngestionStore {
@@ -149,6 +155,21 @@ describe('Community HTTP handler', () => {
     expect(bodyReads).toBe(0);
   });
 
+  it('rejects unsupported methods before reading the body', async () => {
+    let bodyReads = 0;
+    const req = request({ method: 'PUT' });
+    req.text = async () => {
+      bodyReads += 1;
+      return JSON.stringify(envelope());
+    };
+    const handler = createCommunityHttpHandler(verifier(), new Store(), { allowedOrigins: [ORIGIN] });
+    const response = await handler(req);
+
+    expect(response.status).toBe(405);
+    expect(await json(response)).toEqual({ error: 'method_not_allowed' });
+    expect(bodyReads).toBe(0);
+  });
+
   it('accepts a valid browser upload and returns only the persisted batch identity', async () => {
     const store = new Store();
     const handler = createCommunityHttpHandler(verifier(), store, {
@@ -156,16 +177,18 @@ describe('Community HTTP handler', () => {
       nowMs: () => NOW_MS,
     });
     const response = await handler(request());
+    const data = await json(response);
 
     expect(response.status).toBe(201);
     expect(response.headers.get('access-control-allow-origin')).toBe(ORIGIN);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
-    expect(await json(response)).toMatchObject({
+    expect(data).toMatchObject({
       status: 'inserted',
       batchId: 'batch-7',
     });
-    expect(String((await json(new Response(JSON.stringify({ ok: true })))).ok)).toBe('true');
+    expect(data.payloadSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(Object.keys(data).sort()).toEqual(['batchId', 'payloadSha256', 'status']);
     expect(store.calls).toBe(1);
   });
 
@@ -230,7 +253,9 @@ describe('Community HTTP handler', () => {
     expect(text).not.toContain(secret);
     expect(logger.events).toHaveLength(1);
     expect(logger.events[0]?.event).toBe('community_ingestion_internal_failure');
-    expect((logger.events[0]?.error as Error).message).toBe(secret);
+    const logged = logger.events[0]?.error;
+    expect(logged).toBeInstanceOf(Error);
+    if (logged instanceof Error) expect(logged.message).toBe(secret);
   });
 
   it('sanitizes body-read failures before any ingestion logic runs', async () => {
