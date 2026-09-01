@@ -45,6 +45,17 @@ function bytesToHex(bytes: Uint8Array): string {
   return [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
+function hexToBytes(value: string): Uint8Array<ArrayBuffer> | undefined {
+  if (!/^[a-f0-9]{64}$/.test(value)) return undefined;
+  const bytes = new Uint8Array(new ArrayBuffer(32));
+  for (let index = 0; index < bytes.length; index += 1) {
+    const octet = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
+    if (!Number.isFinite(octet)) return undefined;
+    bytes[index] = octet;
+  }
+  return bytes;
+}
+
 function ownArrayBufferView(value: Uint8Array): Uint8Array<ArrayBuffer> {
   const copy = new Uint8Array(new ArrayBuffer(value.byteLength));
   copy.set(value);
@@ -58,6 +69,23 @@ function pepperBytes(value: string | Uint8Array): Uint8Array<ArrayBuffer> {
     throw new Error(`Node credential pepper must contain at least ${MINIMUM_PEPPER_BYTES} bytes`);
   }
   return bytes;
+}
+
+async function importHmacKey(
+  pepper: string | Uint8Array,
+  usages: KeyUsage[],
+): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    pepperBytes(pepper),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    usages,
+  );
+}
+
+function credentialBytes(credential: string): Uint8Array<ArrayBuffer> {
+  return ownArrayBufferView(new TextEncoder().encode(credential));
 }
 
 function fillEntropy(length: number, randomFill: SecureRandomFill): Uint8Array<ArrayBuffer> {
@@ -104,16 +132,25 @@ export async function computeNodeCredentialHmac(
   pepper: string | Uint8Array,
 ): Promise<string> {
   if (!isValidNodeCredential(credential)) throw new Error('Invalid Konta2r node credential format');
-  const key = await crypto.subtle.importKey(
-    'raw',
-    pepperBytes(pepper),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const credentialBytes = ownArrayBufferView(new TextEncoder().encode(credential));
-  const signature = await crypto.subtle.sign('HMAC', key, credentialBytes);
+  const key = await importHmacKey(pepper, ['sign']);
+  const signature = await crypto.subtle.sign('HMAC', key, credentialBytes(credential));
   return bytesToHex(new Uint8Array(signature));
+}
+
+/**
+ * Verifies a stored HMAC using Web Crypto's MAC verification primitive rather
+ * than comparing hexadecimal strings with an application-level early exit.
+ */
+export async function verifyNodeCredentialHmac(
+  credential: string,
+  expectedHmac: string,
+  pepper: string | Uint8Array,
+): Promise<boolean> {
+  if (!isValidNodeCredential(credential)) return false;
+  const signature = hexToBytes(expectedHmac);
+  if (signature === undefined) return false;
+  const key = await importHmacKey(pepper, ['verify']);
+  return crypto.subtle.verify('HMAC', key, signature, credentialBytes(credential));
 }
 
 /**
