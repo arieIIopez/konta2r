@@ -1,3 +1,4 @@
+import type { CommunityDeliveryRuntime } from './deliveryRuntime';
 import type { CommunitySender } from './outbox';
 import type { ActiveNodeCredential, LocalNodeIdentity, NodeProvisioner } from './nodeProvisioning';
 import type { HumanAuthClient, HumanAuthSnapshot } from '../auth/supabaseBrowser';
@@ -26,6 +27,7 @@ export interface NodeCommunityControllerOptions {
   auth?: HumanAuthClient;
   provisioner?: NodeProvisioner;
   sender?: CommunitySender;
+  delivery?: CommunityDeliveryRuntime;
 }
 
 export interface NodeCommunityRuntime {
@@ -42,6 +44,7 @@ export interface NodeCommunityRuntime {
   clearRevoked(): Promise<void>;
   activeCredential(): Promise<ActiveNodeCredential | undefined>;
   sender(): CommunitySender | undefined;
+  delivery(): CommunityDeliveryRuntime | undefined;
   destroy(): void;
 }
 
@@ -231,6 +234,7 @@ export function createNodeCommunityController(options: NodeCommunityControllerOp
     },
 
     sender: () => options.sender,
+    delivery: () => options.delivery,
 
     destroy(): void {
       unsubscribeAuth?.();
