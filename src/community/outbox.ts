@@ -21,7 +21,7 @@ export interface CommunityOutboxItem {
 export interface CommunityOutboxStore {
   put(item: CommunityOutboxItem): Promise<void>;
   get(id: string): Promise<CommunityOutboxItem | undefined>;
-  getDue(nowMs: number, limit: number): Promise<CommunityOutboxItem[]>;
+  getDue(nowMs: number, limit: number, nodeId?: string): Promise<CommunityOutboxItem[]>;
   delete(id: string): Promise<void>;
   count(status?: OutboxStatus): Promise<number>;
 }
@@ -43,6 +43,8 @@ export interface OutboxFlushOptions {
   limit?: number;
   maxAttempts?: number;
   randomUnit?: () => number;
+  /** Prevents a credential for one node from ever flushing another node's queue. */
+  nodeId?: string;
 }
 
 export interface OutboxFlushResult {
@@ -108,7 +110,13 @@ export async function flushCommunityOutbox(
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
   const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 20));
   const randomUnit = options.randomUnit ?? Math.random;
-  const due = await store.getDue(nowMs, limit);
+  const candidates = await store.getDue(nowMs, limit, options.nodeId);
+  // Defensive filtering is intentional even when the store supports nodeId.
+  // A legacy/custom store that ignores the optional argument still cannot leak
+  // a batch into a sender authenticated as another sensor.
+  const due = candidates
+    .filter((item) => options.nodeId === undefined || item.nodeId === options.nodeId)
+    .slice(0, limit);
 
   const result: OutboxFlushResult = {
     attempted: 0,
