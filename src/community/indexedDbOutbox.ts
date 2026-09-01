@@ -44,17 +44,18 @@ export class IndexedDbCommunityOutboxStore implements CommunityOutboxStore {
     return db.get('outbox', id);
   }
 
-  async getDue(nowMs: number, limit: number): Promise<CommunityOutboxItem[]> {
+  async getDue(nowMs: number, limit: number, nodeId?: string): Promise<CommunityOutboxItem[]> {
     const db = await this.dbPromise;
     const range = IDBKeyRange.upperBound(nowMs);
+    const scanLimit = Math.max(limit * 5, limit);
     const candidates = await db.getAllFromIndex(
       'outbox',
       'by-next-attempt',
       range,
-      Math.max(limit * 3, limit),
+      scanLimit,
     );
     return candidates
-      .filter((item) => item.status === 'pending')
+      .filter((item) => item.status === 'pending' && (nodeId === undefined || item.nodeId === nodeId))
       .sort((a, b) => a.nextAttemptAtMs - b.nextAttemptAtMs || a.sequence - b.sequence)
       .slice(0, limit);
   }
