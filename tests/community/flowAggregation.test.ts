@@ -23,7 +23,7 @@ function crossing(
 }
 
 describe('community flow aggregation', () => {
-  it('removes track/event/session identifiers and exact timestamps from outgoing records', () => {
+  it('removes private identifiers, local geometry and exact timestamps from outgoing records', () => {
     const base = 1_788_000_000_000;
     const aggregate = aggregateCrossingsForCommunity([
       crossing('t1', base + 10_000),
@@ -37,6 +37,7 @@ describe('community flow aggregation', () => {
     expect(Object.keys(aggregate ?? {})).not.toContain('eventId');
     expect(Object.keys(aggregate ?? {})).not.toContain('sessionId');
     expect(Object.keys(aggregate ?? {})).not.toContain('timestampMs');
+    expect(Object.keys(aggregate ?? {})).not.toContain('geometryId');
   });
 
   it('suppresses low-count buckets by default', () => {

@@ -9,10 +9,6 @@ export interface CommunityFlowAggregationOptions {
   directionMap?: Partial<Record<CrossingDirection, CommunityDirection>>;
 }
 
-export interface CommunityFlowAggregate extends PublicFlowAggregate {
-  geometryId: string;
-}
-
 interface MutableFlowAggregate {
   bucketStartMs: number;
   geometryId: string;
@@ -33,13 +29,13 @@ const DEFAULT_DIRECTION_MAP: Record<CrossingDirection, CommunityDirection> = {
 
 /**
  * Reduces local event-level crossings to community-safe time buckets. Event
- * IDs, track IDs and exact timestamps are consumed locally and never appear in
- * the returned aggregates.
+ * IDs, track IDs, exact timestamps and local geometry identifiers are consumed
+ * locally and never appear in the returned public records.
  */
 export function aggregateCrossingsForCommunity(
   events: readonly LineCrossingEvent[],
   options: CommunityFlowAggregationOptions = {},
-): CommunityFlowAggregate[] {
+): PublicFlowAggregate[] {
   const bucketMs = options.bucketMs ?? 5 * 60_000;
   const minCount = Math.max(1, Math.floor(options.minCount ?? 3));
   const minEventConfidence = clamp01(options.minEventConfidence ?? 0.5);
@@ -81,12 +77,11 @@ export function aggregateCrossingsForCommunity(
 
   return [...groups.values()]
     .filter((group) => group.count >= minCount)
-    .map((group): CommunityFlowAggregate => ({
+    .map((group): PublicFlowAggregate => ({
       schemaVersion: '2.0',
       aggregateType: 'flow',
       bucketStartMs: group.bucketStartMs,
       bucketEndMs: group.bucketStartMs + bucketMs,
-      geometryId: group.geometryId,
       entityType: group.entityType,
       direction: group.direction,
       count: group.count,
@@ -94,7 +89,6 @@ export function aggregateCrossingsForCommunity(
     }))
     .sort((a, b) => (
       a.bucketStartMs - b.bucketStartMs
-      || a.geometryId.localeCompare(b.geometryId)
       || a.entityType.localeCompare(b.entityType)
       || a.direction.localeCompare(b.direction)
     ));
