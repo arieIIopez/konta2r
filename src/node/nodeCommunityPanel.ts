@@ -1,4 +1,5 @@
 import type {
+  NodeCommunityIdentity,
   NodeCommunityRuntime,
   NodeCommunitySnapshot,
 } from '../community/nodeCommunityController';
@@ -20,7 +21,7 @@ function setDisabled(root: HTMLElement, selector: string, disabled: boolean): vo
 function statusLabel(snapshot: NodeCommunitySnapshot): string {
   if (!snapshot.configured) return 'no configurado';
   if (!snapshot.identity) return 'sin nodo';
-  const labels: Record<NodeCommunitySnapshot['identity']['status'], string> = {
+  const labels: Record<NodeCommunityIdentity['status'], string> = {
     provisioning: 'provisionando',
     active: 'activo',
     paused: 'pausado',
