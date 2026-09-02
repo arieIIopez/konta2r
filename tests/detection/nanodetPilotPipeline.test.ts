@@ -86,7 +86,10 @@ describe('NanoDetPilotPipeline', () => {
     });
 
     expect(loaderCalls).toBe(0);
-    expect(pipeline.snapshot()).toEqual({ state: 'idle' });
+    expect(pipeline.snapshot()).toEqual({
+      state: 'idle',
+      displayName: 'NanoDet piloto',
+    });
 
     const initialization = await pipeline.initialize();
     expect(loaderCalls).toBe(1);
@@ -94,6 +97,7 @@ describe('NanoDetPilotPipeline', () => {
     expect(initialization.runtime.backend).toBe('wasm');
     expect(pipeline.snapshot()).toMatchObject({
       state: 'ready',
+      displayName: 'NanoDet piloto',
       artifactSource: 'cache',
       cachePersisted: true,
       backend: 'wasm',
@@ -101,7 +105,10 @@ describe('NanoDetPilotPipeline', () => {
 
     await pipeline.dispose();
     expect(detector.disposeCalls).toBe(1);
-    expect(pipeline.snapshot()).toEqual({ state: 'disposed' });
+    expect(pipeline.snapshot()).toEqual({
+      state: 'disposed',
+      displayName: 'NanoDet piloto',
+    });
   });
 
   it('processes semantic frames locally without inventing a counting line', async () => {
@@ -135,6 +142,7 @@ describe('NanoDetPilotPipeline', () => {
     await expect(pipeline.initialize()).rejects.toThrow('pilot download failed');
     expect(pipeline.snapshot()).toEqual({
       state: 'error',
+      displayName: 'NanoDet piloto',
       error: 'pilot download failed',
     });
     await pipeline.dispose();
