@@ -1,3 +1,4 @@
+import './countingGeometry.css';
 import { CountingGeometryEditor, type CountingGeometryEditorSnapshot } from './countingGeometryEditor';
 import { IndexedDbCountingGeometryStore } from './indexedDbCountingGeometry';
 
