@@ -42,8 +42,10 @@ describe('Supabase deployment readiness', () => {
     expect(deploymentRunbook).toContain('Do not paste that token into chat or commit it.');
   });
 
-  it('keeps live deployment gated on a dedicated project and advisors', () => {
-    expect(deploymentRunbook).toContain('dedicated Konta2r Supabase project');
+  it('keeps live deployment gated on the dedicated Free project and advisors', () => {
+    expect(deploymentRunbook).toContain('dedicated Supabase project');
+    expect(deploymentRunbook).toContain('project: `konta2r`');
+    expect(deploymentRunbook).toContain('organization plan: `free`');
     expect(deploymentRunbook).toContain('Security Advisor');
     expect(deploymentRunbook).toContain('Performance Advisor');
     expect(deploymentRunbook).toContain('no unrelated Supabase project was modified');
