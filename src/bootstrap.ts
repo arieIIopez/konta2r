@@ -1,4 +1,5 @@
 import './node.css';
+import type { NodePilotPipelineFactory } from './node/pilotPipeline';
 import { registerKonta2rServiceWorker } from './pwa/register';
 
 async function bootstrap(): Promise<void> {
@@ -73,7 +74,16 @@ async function bootstrap(): Promise<void> {
     publishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
     appOrigin: window.location.origin,
   });
-  const panel = new NodePanel(pwa, community);
+
+  let pilotPipelineFactory: NodePilotPipelineFactory | undefined;
+  if (import.meta.env.VITE_KONTA2R_EXPERIMENTAL_DETECTOR === 'nanodet') {
+    const { NanoDetPilotPipeline } = await import('./detection/nanodetPilotPipeline');
+    pilotPipelineFactory = (maxDetections) => new NanoDetPilotPipeline({ maxDetections });
+  }
+
+  const panel = new NodePanel(pwa, community, {
+    ...(pilotPipelineFactory === undefined ? {} : { pilotPipelineFactory }),
+  });
   panel.mount(mount);
   window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
 }
