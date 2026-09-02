@@ -5,6 +5,9 @@ import type { CommunityDeliveryRuntime } from '../../src/community/deliveryRunti
 import type { ClosedCommunityFlowBucket } from '../../src/community/flowBucketCollector';
 import { CommunityFlowBucketPublisher } from '../../src/community/flowBucketPublisher';
 
+const NODE_A = 'node_publish01';
+const NODE_B = 'node_publish02';
+
 function detector(): DetectorInitialization {
   return {
     model: {
@@ -56,8 +59,9 @@ function snapshot(): NodeRuntimeSnapshot {
   } as NodeRuntimeSnapshot;
 }
 
-function bucket(records = true): ClosedCommunityFlowBucket {
+function bucket(nodeId = NODE_A, records = true): ClosedCommunityFlowBucket {
   return {
+    nodeId,
     streamId: 'line_main',
     bucketStartMs: 1_788_000_000_000,
     bucketEndMs: 1_788_000_300_000,
@@ -77,12 +81,17 @@ function bucket(records = true): ClosedCommunityFlowBucket {
 
 function deliveryHarness() {
   const publicationKeys: string[] = [];
+  const expectedNodeIds: Array<string | undefined> = [];
   const releasedKeys: string[] = [];
   let flushes = 0;
   const delivery = {
-    async enqueue(_draft: unknown, options?: { publicationKey?: string }) {
+    async enqueue(
+      _draft: unknown,
+      options?: { publicationKey?: string; expectedNodeId?: string },
+    ) {
       publicationKeys.push(options?.publicationKey ?? '');
-      return { nodeId: 'node_publish01' };
+      expectedNodeIds.push(options?.expectedNodeId);
+      return { nodeId: options?.expectedNodeId ?? NODE_A };
     },
     async releasePublication(nodeId: string, publicationKey: string) {
       releasedKeys.push(`${nodeId}|${publicationKey}`);
@@ -92,20 +101,27 @@ function deliveryHarness() {
       return { attempted: 0, delivered: 0, retryScheduled: 0, deadLettered: 0 };
     },
   } as unknown as CommunityDeliveryRuntime;
-  return { delivery, publicationKeys, releasedKeys, flushes: () => flushes };
+  return {
+    delivery,
+    publicationKeys,
+    expectedNodeIds,
+    releasedKeys,
+    flushes: () => flushes,
+  };
 }
 
 describe('CommunityFlowBucketPublisher', () => {
   it('enqueues a closed public bucket, commits its source and retires the reservation', async () => {
-    const commits: number[] = [];
+    const commits: Array<[string, number]> = [];
     const harness = deliveryHarness();
     const publisher = new CommunityFlowBucketPublisher({
       collector: {
         async observe() {},
-        async closed() { return [bucket()]; },
-        async commit(start) { commits.push(start); },
+        async closed(nodeId) { return [bucket(nodeId)]; },
+        async commit(nodeId, start) { commits.push([nodeId, start]); },
       },
       delivery: harness.delivery,
+      activeNodeId: () => NODE_A,
       runtimeSnapshot: snapshot,
       detectorInitialization: detector,
       softwareVersion: '2.0.0-alpha.1',
@@ -114,12 +130,13 @@ describe('CommunityFlowBucketPublisher', () => {
 
     const result = await publisher.publishClosed(1_788_000_400_000);
     expect(result.enqueuedBuckets).toBe(1);
-    expect(commits).toEqual([1_788_000_000_000]);
+    expect(commits).toEqual([[NODE_A, 1_788_000_000_000]]);
     expect(harness.publicationKeys).toEqual([
-      'flow-v2:line_main:1788000000000:1788000300000',
+      'flow-v2:node_publish01:line_main:1788000000000:1788000300000',
     ]);
+    expect(harness.expectedNodeIds).toEqual([NODE_A]);
     expect(harness.releasedKeys).toEqual([
-      'node_publish01|flow-v2:line_main:1788000000000:1788000300000',
+      'node_publish01|flow-v2:node_publish01:line_main:1788000000000:1788000300000',
     ]);
   });
 
@@ -129,13 +146,14 @@ describe('CommunityFlowBucketPublisher', () => {
     const publisher = new CommunityFlowBucketPublisher({
       collector: {
         async observe() {},
-        async closed() { return [bucket()]; },
+        async closed(nodeId) { return [bucket(nodeId)]; },
         async commit() {
           commits += 1;
           if (commits === 1) throw new Error('simulated crash boundary');
         },
       },
       delivery: harness.delivery,
+      activeNodeId: () => NODE_A,
       runtimeSnapshot: snapshot,
       detectorInitialization: detector,
       softwareVersion: '2.0.0-alpha.1',
@@ -157,10 +175,11 @@ describe('CommunityFlowBucketPublisher', () => {
     const publisher = new CommunityFlowBucketPublisher({
       collector: {
         async observe() {},
-        async closed() { return [bucket()]; },
+        async closed(nodeId) { return [bucket(nodeId)]; },
         async commit() { committed = true; },
       },
       delivery: harness.delivery,
+      activeNodeId: () => NODE_A,
       runtimeSnapshot: snapshot,
       detectorInitialization: () => null,
       softwareVersion: '2.0.0-alpha.1',
@@ -180,10 +199,11 @@ describe('CommunityFlowBucketPublisher', () => {
     const publisher = new CommunityFlowBucketPublisher({
       collector: {
         async observe() {},
-        async closed() { return [bucket(false)]; },
+        async closed(nodeId) { return [bucket(nodeId, false)]; },
         async commit() { committed = true; },
       },
       delivery: harness.delivery,
+      activeNodeId: () => NODE_A,
       runtimeSnapshot: snapshot,
       detectorInitialization: detector,
       softwareVersion: '2.0.0-alpha.1',
@@ -196,6 +216,57 @@ describe('CommunityFlowBucketPublisher', () => {
     expect(harness.publicationKeys).toHaveLength(0);
   });
 
+  it('does not inspect or publish buckets while the node is inactive', async () => {
+    const harness = deliveryHarness();
+    let closedCalls = 0;
+    const publisher = new CommunityFlowBucketPublisher({
+      collector: {
+        async observe() {},
+        async closed() {
+          closedCalls += 1;
+          return [bucket(NODE_A)];
+        },
+        async commit() {},
+      },
+      delivery: harness.delivery,
+      activeNodeId: () => undefined,
+      runtimeSnapshot: snapshot,
+      detectorInitialization: detector,
+      softwareVersion: '2.0.0-alpha.1',
+      methodologyVersion: '2.0',
+    });
+
+    const result = await publisher.publishClosed(1_788_000_400_000);
+    expect(result.skipped).toBe('node_inactive');
+    expect(closedCalls).toBe(0);
+    expect(harness.publicationKeys).toHaveLength(0);
+    expect(harness.flushes()).toBe(1);
+  });
+
+  it('never accepts a bucket claiming another node from a custom collector', async () => {
+    const harness = deliveryHarness();
+    let committed = false;
+    const publisher = new CommunityFlowBucketPublisher({
+      collector: {
+        async observe() {},
+        async closed() { return [bucket(NODE_B)]; },
+        async commit() { committed = true; },
+      },
+      delivery: harness.delivery,
+      activeNodeId: () => NODE_A,
+      runtimeSnapshot: snapshot,
+      detectorInitialization: detector,
+      softwareVersion: '2.0.0-alpha.1',
+      methodologyVersion: '2.0',
+    });
+
+    const result = await publisher.publishClosed(1_788_000_400_000);
+    expect(result.retainedBuckets).toBe(1);
+    expect(result.enqueuedBuckets).toBe(0);
+    expect(committed).toBe(false);
+    expect(harness.publicationKeys).toHaveLength(0);
+  });
+
   it('uses connectivity recovery to flush an existing durable outbox even with no closed bucket', async () => {
     const harness = deliveryHarness();
     const publisher = new CommunityFlowBucketPublisher({
@@ -205,6 +276,7 @@ describe('CommunityFlowBucketPublisher', () => {
         async commit() {},
       },
       delivery: harness.delivery,
+      activeNodeId: () => NODE_A,
       runtimeSnapshot: snapshot,
       detectorInitialization: detector,
       softwareVersion: '2.0.0-alpha.1',
