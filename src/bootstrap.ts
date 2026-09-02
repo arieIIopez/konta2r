@@ -65,9 +65,10 @@ async function bootstrap(): Promise<void> {
   }
 
   await import('./main');
-  const [{ NodePanel }, { createBrowserNodeCommunity }] = await Promise.all([
+  const [{ NodePanel }, { createBrowserNodeCommunity }, { CountingGeometryPanel }] = await Promise.all([
     import('./node/nodePanel'),
     import('./community/browserNodeCommunity'),
+    import('./node/countingGeometryPanel'),
   ]);
   const community = createBrowserNodeCommunity({
     projectUrl: import.meta.env.VITE_SUPABASE_URL,
@@ -85,7 +86,12 @@ async function bootstrap(): Promise<void> {
     ...(pilotPipelineFactory === undefined ? {} : { pilotPipelineFactory }),
   });
   panel.mount(mount);
-  window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
+  const geometryPanel = new CountingGeometryPanel();
+  geometryPanel.mount(mount);
+  window.addEventListener('beforeunload', () => {
+    geometryPanel.destroy();
+    panel.destroy();
+  }, { once: true });
 }
 
 void bootstrap();
