@@ -127,8 +127,9 @@ export class CommunityFlowBucketPublisher {
       }
 
       const snapshot = this.runtimeSnapshot();
+      const key = publicationKey(bucket);
       try {
-        await this.delivery.enqueue({
+        const item = await this.delivery.enqueue({
           softwareVersion: this.softwareVersion,
           methodologyVersion: this.methodologyVersion,
           modelFingerprint: communityModelFingerprint(detector),
@@ -136,13 +137,21 @@ export class CommunityFlowBucketPublisher {
           runtime: communityRuntimeSummary(snapshot, detector),
           records: bucket.records,
         }, {
-          publicationKey: publicationKey(bucket),
+          publicationKey: key,
         });
         // Deleting the source bucket only after durable outbox enqueue gives
         // at-least-once local publication. The reservation key makes a crash
         // between these two operations idempotent on retry.
         await this.collector.commit(bucket.bucketStartMs);
         enqueuedBuckets += 1;
+        // Once the source bucket is gone it can no longer be republished, so its
+        // temporary reservation can be retired. Failure here is only local
+        // housekeeping; the monotonic sequence and durable outbox stay valid.
+        try {
+          await this.delivery.releasePublication(item.nodeId, key);
+        } catch {
+          // A stale reservation is harmless and can be cleaned by later maintenance.
+        }
       } catch {
         retainedBuckets += 1;
         skipped = 'enqueue_unavailable';
