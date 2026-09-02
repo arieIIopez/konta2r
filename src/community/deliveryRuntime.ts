@@ -49,6 +49,7 @@ export interface CommunityDeliveryFlushResult extends OutboxFlushResult {
 
 export interface CommunityDeliveryRuntime {
   enqueue(draft: CommunityBatchDraft, options?: CommunityEnqueueOptions): Promise<CommunityOutboxItem>;
+  releasePublication(nodeId: string, publicationKey: string): Promise<void>;
   flush(options?: OutboxFlushOptions): Promise<CommunityDeliveryFlushResult>;
 }
 
@@ -128,6 +129,10 @@ export function createCommunityDeliveryRuntime(
         records: draft.records,
       };
       return enqueueCommunityUpload(options.outbox, envelope, generatedAtMs);
+    },
+
+    async releasePublication(nodeId, publicationKey): Promise<void> {
+      await options.sequences.release(nodeId, publicationKey);
     },
 
     async flush(flushOptions = {}): Promise<CommunityDeliveryFlushResult> {
