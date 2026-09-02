@@ -94,17 +94,25 @@ export class NanoDetPilotPipeline implements NodePilotPipeline {
   }
 
   private async initializeOnce(): Promise<DetectorInitialization> {
+    let candidatePipeline: EdgeMobilityPipeline | null = null;
     try {
       const loaded = await this.loader(this.options);
       if (this.disposed) {
         await loaded.detector.dispose();
         throw new Error('NanoDet pilot pipeline was disposed during initialization');
       }
-      const pipeline = new EdgeMobilityPipeline(loaded.detector, {
+
+      candidatePipeline = new EdgeMobilityPipeline(loaded.detector, {
         sessionId: this.options.sessionId ?? localSessionId(),
       });
-      this.pipeline = pipeline;
-      const initialization = await pipeline.initialize();
+      this.pipeline = candidatePipeline;
+      const initialization = await candidatePipeline.initialize();
+      if (this.disposed) {
+        await candidatePipeline.dispose();
+        if (this.pipeline === candidatePipeline) this.pipeline = null;
+        throw new Error('NanoDet pilot pipeline was disposed during initialization');
+      }
+
       this.initialization = initialization;
       this.state = {
         state: 'ready',
@@ -117,15 +125,23 @@ export class NanoDetPilotPipeline implements NodePilotPipeline {
       };
       return initialization;
     } catch (error) {
-      this.pipeline = null;
+      if (candidatePipeline && this.pipeline === candidatePipeline) {
+        try {
+          await candidatePipeline.dispose();
+        } catch {
+          // Preserve the initialization error. Cleanup failure must not mask it.
+        }
+        this.pipeline = null;
+      }
       this.initialization = null;
-      this.initializationPromise = null;
       this.state = {
         state: 'error',
         displayName: PILOT_NAME,
         error: normalizeError(error),
       };
       throw error;
+    } finally {
+      this.initializationPromise = null;
     }
   }
 }
