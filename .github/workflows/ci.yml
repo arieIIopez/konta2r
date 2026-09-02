@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.5
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Deployment probe syntax
+        run: |
+          node --check tools/supabase-http-smoke.mjs
+          node --check tools/supabase-e2e-lifecycle.mjs
+
+      - name: Edge Functions typecheck
+        run: |
+          deno check --config supabase/functions/deno.json supabase/functions/node-enroll/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/node-lifecycle/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/ingest-community/index.ts
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build

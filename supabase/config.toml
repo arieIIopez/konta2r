@@ -1,0 +1,15 @@
+# Minimal Konta2r Edge Function configuration.
+# Project-level settings will be initialized with the current Supabase CLI once
+# the dedicated Konta2r project exists. Do not add an unrelated project_id here.
+
+[functions.node-enroll]
+verify_jwt = true
+
+# Human-authorized lifecycle mutations: activate, pause, revoke and credential rotation.
+[functions.node-lifecycle]
+verify_jwt = true
+
+# This endpoint deliberately uses custom sensor credentials instead of a human
+# Supabase JWT. The handler validates `Authorization: Konta2rNode ...` itself.
+[functions.ingest-community]
+verify_jwt = false

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1",
+  "corpusId": "konta2r-pilot-001",
+  "createdAtIso": "2026-08-31T15:00:00.000Z",
+  "sequences": [
+    {
+      "sequenceId": "seq-dev-001",
+      "annotationSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mediaSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "split": "development",
+      "siteId": "site-001",
+      "sceneType": "mixed_traffic",
+      "lighting": "day",
+      "viewAngle": "medium_oblique",
+      "deviceProfile": "balanced",
+      "tags": ["pilot"]
+    },
+    {
+      "sequenceId": "seq-test-001",
+      "annotationSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "mediaSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "split": "held_out_test",
+      "siteId": "site-002",
+      "sceneType": "protected_cycleway",
+      "lighting": "backlight",
+      "viewAngle": "high_oblique",
+      "deviceProfile": "eco"
+    }
+  ],
+  "note": "Ejemplo estructural. Reemplazar hashes, sitios pseudónimos y condiciones por evidencia real del piloto."
+}
