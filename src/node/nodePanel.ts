@@ -1,8 +1,23 @@
 import type { NodeCommunityRuntime } from '../community/nodeCommunityController';
+import { NanoDetPilotPipeline } from '../detection/nanodetPilotPipeline';
+import type { EdgeMobilityPipelineFrame } from '../pipeline/edgeMobilityPipeline';
 import type { PwaRuntimeState } from '../pwa/register';
 import { NODE_PROFILE_SETTINGS, type NodePerformanceProfile } from './deviceProfile';
+import type { InferenceLoopState } from './inferenceLoop';
 import { NodeCommunityPanel } from './nodeCommunityPanel';
 import { NodeRuntimeController, type NodeRuntimeSnapshot } from './runtimeController';
+import { RuntimeInferenceBridge } from './runtimeInferenceBridge';
+
+export interface NodePanelOptions {
+  /** Explicit field-pilot opt-in. It is never enabled by default. */
+  experimentalDetector?: 'nanodet';
+}
+
+interface PilotFrameStats {
+  detections: number;
+  fusedEntities: number;
+  confirmedTracks: number;
+}
 
 function formatBytes(value: number | undefined): string {
   if (value === undefined) return '—';
@@ -26,13 +41,49 @@ export class NodePanel {
   private readonly pwa: PwaRuntimeState;
   private readonly community: NodeCommunityRuntime;
   private readonly communityPanel: NodeCommunityPanel;
+  private readonly pilotPipeline: NanoDetPilotPipeline | null;
+  private readonly inferenceBridge: RuntimeInferenceBridge<EdgeMobilityPipelineFrame> | null;
   private root: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
+  private pilotLoopState: InferenceLoopState = 'idle';
+  private pilotFrameStats: PilotFrameStats | null = null;
+  private pilotError: string | undefined;
 
-  constructor(pwa: PwaRuntimeState, community: NodeCommunityRuntime) {
+  constructor(
+    pwa: PwaRuntimeState,
+    community: NodeCommunityRuntime,
+    options: NodePanelOptions = {},
+  ) {
     this.pwa = pwa;
     this.community = community;
     this.communityPanel = new NodeCommunityPanel(community);
+    if (options.experimentalDetector === 'nanodet') {
+      this.pilotPipeline = new NanoDetPilotPipeline({
+        maxDetections: () => NODE_PROFILE_SETTINGS[this.runtime.snapshot().profile].maxDetections,
+      });
+      this.inferenceBridge = new RuntimeInferenceBridge(this.runtime, this.pilotPipeline, {
+        onFrame: (frame) => {
+          this.pilotFrameStats = {
+            detections: frame.detector.detections.length,
+            fusedEntities: frame.fusion.entities.length,
+            confirmedTracks: frame.tracking.confirmedTracks.length,
+          };
+          this.renderPilot();
+        },
+        onStateChange: (state) => {
+          this.pilotLoopState = state;
+          if (state !== 'error') this.pilotError = undefined;
+          this.renderPilot();
+        },
+        onError: (error) => {
+          this.pilotError = error.message;
+          this.renderPilot();
+        },
+      });
+    } else {
+      this.pilotPipeline = null;
+      this.inferenceBridge = null;
+    }
   }
 
   mount(root: HTMLElement): void {
@@ -58,6 +109,8 @@ export class NodePanel {
           <div class="node-runtime-status">
             <div class="runtime-stat"><span>Perfil</span><strong data-profile>—</strong><small data-profile-detail>—</small></div>
             <div class="runtime-stat"><span>Cámara</span><strong data-camera>—</strong><small data-camera-detail>—</small></div>
+            <div class="runtime-stat"><span>Detector</span><strong data-detector>—</strong><small data-detector-detail>—</small></div>
+            <div class="runtime-stat"><span>Semántica</span><strong data-semantic>—</strong><small data-semantic-detail>—</small></div>
             <div class="runtime-stat"><span>Carga</span><strong data-load>—</strong><small data-load-detail>—</small></div>
             <div class="runtime-stat"><span>Continuidad</span><strong data-continuity>—</strong><small data-continuity-detail>—</small></div>
             <div class="runtime-stat"><span>Wake lock</span><strong data-wake>—</strong><small data-wake-detail>—</small></div>
@@ -86,6 +139,7 @@ export class NodePanel {
     const video = root.querySelector<HTMLVideoElement>('#node-camera');
     if (!video) throw new Error('Missing node camera surface');
     this.runtime.attachVideo(video);
+    this.inferenceBridge?.attachVideo(video);
 
     const communityMount = root.querySelector<HTMLElement>('[data-community-mount]');
     if (!communityMount) throw new Error('Missing Community node surface');
@@ -101,11 +155,14 @@ export class NodePanel {
 
     this.unsubscribe?.();
     this.unsubscribe = this.runtime.subscribe((snapshot) => this.update(snapshot));
+    this.renderPilot();
     void this.runtime.inspectStorage(false);
   }
 
   destroy(): void {
     this.unsubscribe?.();
+    this.inferenceBridge?.detachVideo();
+    if (this.inferenceBridge) void this.inferenceBridge.dispose();
     this.communityPanel.destroy();
     this.community.destroy();
     this.runtime.destroy();
@@ -131,10 +188,12 @@ export class NodePanel {
 
     if (snapshot.health.sampleCount === 0) {
       setText(root, '[data-load]', 'sin muestras');
-      setText(root, '[data-load-detail]', 'se activará con el loop de inferencia ONNX');
+      setText(root, '[data-load-detail]', this.pilotPipeline
+        ? 'se activará con el piloto ONNX al iniciar el nodo'
+        : 'se activará cuando exista un loop de inferencia ONNX');
     } else {
       setText(root, '[data-load]', snapshot.health.loadPressure);
-      setText(root, '[data-load-detail]', `${snapshot.health.observedFps.toFixed(1)} Hz · p95 ${snapshot.health.processingLatencyP95Ms.toFixed(0)} ms · drops ${(snapshot.health.droppedFrameRatio * 100).toFixed(0)}%`);
+      setText(root, '[data-load-detail]', `${snapshot.health.observedFps.toFixed(1)} Hz · p50 ${snapshot.health.inferenceFpsP50.toFixed(1)} Hz · p95 ${snapshot.health.processingLatencyP95Ms.toFixed(0)} ms · drops ${(snapshot.health.droppedFrameRatio * 100).toFixed(0)}%`);
     }
 
     if (snapshot.continuity.elapsedMs === 0) {
@@ -175,10 +234,48 @@ export class NodePanel {
     const memory = snapshot.hints.deviceMemoryGiB === undefined ? '' : ` · ~${snapshot.hints.deviceMemoryGiB} GiB RAM reportada`;
     setText(root, '[data-hints]', `Arranque automático: ${snapshot.hints.hardwareConcurrency} hilos lógicos · ${snapshot.hints.webgpu ? 'WebGPU disponible' : 'sin WebGPU'}${memory}. El desempeño medido tendrá prioridad sobre estos hints.`);
 
+    this.renderPilot();
     const error = root.querySelector<HTMLElement>('[data-error]');
     if (error) {
-      error.textContent = snapshot.error ?? '';
-      error.classList.toggle('hidden', snapshot.error === undefined);
+      const message = snapshot.error ?? this.pilotError;
+      error.textContent = message ?? '';
+      error.classList.toggle('hidden', message === undefined);
     }
+  }
+
+  private renderPilot(): void {
+    const root = this.root;
+    if (!root) return;
+    if (!this.pilotPipeline) {
+      setText(root, '[data-detector]', 'desactivado');
+      setText(root, '[data-detector-detail]', 'build estándar · sin detector experimental');
+      setText(root, '[data-semantic]', 'sin loop');
+      setText(root, '[data-semantic-detail]', 'la cámara puede operar sin inferencia');
+      return;
+    }
+
+    const pilot = this.pilotPipeline.snapshot();
+    if (pilot.state === 'idle') {
+      setText(root, '[data-detector]', 'NanoDet piloto');
+      setText(root, '[data-detector-detail]', 'externo · SHA verificado al iniciar · no seleccionado para producción');
+    } else if (pilot.state === 'loading') {
+      setText(root, '[data-detector]', 'cargando piloto…');
+      setText(root, '[data-detector-detail]', 'descarga/cache local + verificación SHA-256');
+    } else if (pilot.state === 'ready') {
+      setText(root, '[data-detector]', `NanoDet · ${pilot.backend ?? '—'}`);
+      setText(root, '[data-detector-detail]', `${pilot.artifactSource === 'cache' ? 'cache verificado' : 'descarga verificada'}${pilot.cachePersisted ? ' · persistido' : ''} · ${pilot.modelSha256?.slice(0, 12) ?? '—'}…`);
+    } else if (pilot.state === 'error') {
+      setText(root, '[data-detector]', 'error de piloto');
+      setText(root, '[data-detector-detail]', pilot.error ?? 'fallo de inicialización');
+    } else {
+      setText(root, '[data-detector]', pilot.state);
+      setText(root, '[data-detector-detail]', 'runtime piloto');
+    }
+
+    const frame = this.pilotFrameStats;
+    setText(root, '[data-semantic]', this.pilotLoopState);
+    setText(root, '[data-semantic-detail]', frame
+      ? `${frame.detections} detecciones · ${frame.fusedEntities} entidades · ${frame.confirmedTracks} tracks confirmados`
+      : 'sin frame procesado aún');
   }
 }
