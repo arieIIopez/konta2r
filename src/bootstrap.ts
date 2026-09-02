@@ -1,6 +1,7 @@
 import './node.css';
 import type { NodePilotPipelineFactory } from './node/pilotPipeline';
 import { registerKonta2rServiceWorker } from './pwa/register';
+import { KONTA2R_METHODOLOGY_VERSION, KONTA2R_VERSION } from './version';
 
 async function bootstrap(): Promise<void> {
   const pwa = await registerKonta2rServiceWorker();
@@ -65,7 +66,11 @@ async function bootstrap(): Promise<void> {
   }
 
   await import('./main');
-  const [{ NodePanel }, { createBrowserNodeCommunity }, { CountingGeometryPanel }] = await Promise.all([
+  const [
+    { NodePanel },
+    { createBrowserNodeCommunity, createBrowserCommunityFlowRuntime },
+    { CountingGeometryPanel },
+  ] = await Promise.all([
     import('./node/nodePanel'),
     import('./community/browserNodeCommunity'),
     import('./node/countingGeometryPanel'),
@@ -86,6 +91,16 @@ async function bootstrap(): Promise<void> {
     ...(pilotPipelineFactory === undefined ? {} : { pilotPipelineFactory }),
   });
   panel.mount(mount);
+
+  const flowRuntime = createBrowserCommunityFlowRuntime({
+    community,
+    runtime: { snapshot: () => panel.runtimeSnapshot() },
+    pipeline: { getInitialization: () => panel.detectorInitialization() },
+    softwareVersion: KONTA2R_VERSION,
+    methodologyVersion: KONTA2R_METHODOLOGY_VERSION,
+  });
+  panel.attachCommunityFlowRuntime(flowRuntime);
+
   const geometryPanel = new CountingGeometryPanel({
     onOperationalGeometryChange: (configuration) => panel.setCountingGeometry(configuration),
   });

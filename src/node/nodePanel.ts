@@ -1,8 +1,14 @@
+import type { CommunityFlowRuntime } from '../community/flowRuntime';
 import type { NodeCommunityRuntime } from '../community/nodeCommunityController';
+import type { DetectorInitialization } from '../detection/types';
 import type { EdgeMobilityPipelineFrame } from '../pipeline/edgeMobilityPipeline';
 import type { PwaRuntimeState } from '../pwa/register';
 import { KONTA2R_VERSION } from '../version';
-import type { CountingGeometryConfiguration } from './countingGeometry';
+import {
+  countingGeometryStreamId,
+  operationalCountingLine,
+  type CountingGeometryConfiguration,
+} from './countingGeometry';
 import { NODE_PROFILE_SETTINGS, type NodePerformanceProfile } from './deviceProfile';
 import {
   FieldPilotEvidenceRecorder,
@@ -68,13 +74,17 @@ export class NodePanel {
   private readonly pilotPipeline: NodePilotPipeline | null;
   private readonly inferenceBridge: RuntimeInferenceBridge<EdgeMobilityPipelineFrame> | null;
   private readonly fieldPilotEvidence: FieldPilotEvidenceRecorder | null;
+  private communityFlowRuntime: CommunityFlowRuntime | null = null;
   private root: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
+  private communityUnsubscribe: (() => void) | null = null;
+  private communityDeliveryIdentityKey: string | null = null;
   private pilotLoopState: InferenceLoopState = 'idle';
   private pilotFrameStats: PilotFrameStats | null = null;
   private pilotError: string | undefined;
   private evidenceStatus = 'sin sesión';
   private evidenceError: string | undefined;
+  private communityFlowError: string | undefined;
   private countingGeometry: CountingGeometryConfiguration | undefined;
   private countingGeometryKey = 'none';
   private localCrossings = emptyCrossingCounts();
@@ -107,6 +117,7 @@ export class NodePanel {
               if (crossing.direction === 'LEFT_TO_RIGHT') this.localCrossings.aToB += 1;
               else this.localCrossings.bToA += 1;
             }
+            void this.observeCommunityFlow(frame);
             void this.recordPilotEvidence();
             this.renderPilot();
           },
@@ -151,6 +162,7 @@ export class NodePanel {
             <div class="runtime-stat"><span>Detector</span><strong data-detector>—</strong><small data-detector-detail>—</small></div>
             <div class="runtime-stat"><span>Semántica</span><strong data-semantic>—</strong><small data-semantic-detail>—</small></div>
             <div class="runtime-stat"><span>Cruces locales</span><strong data-crossings>0</strong><small data-crossings-detail>sin geometría operacional</small></div>
+            <div class="runtime-stat"><span>Community flujo</span><strong data-community-flow>—</strong><small data-community-flow-detail>—</small></div>
             <div class="runtime-stat"><span>Carga</span><strong data-load>—</strong><small data-load-detail>—</small></div>
             <div class="runtime-stat"><span>Continuidad</span><strong data-continuity>—</strong><small data-continuity-detail>—</small></div>
             <div class="runtime-stat"><span>Wake lock</span><strong data-wake>—</strong><small data-wake-detail>—</small></div>
@@ -186,6 +198,17 @@ export class NodePanel {
     const communityMount = root.querySelector<HTMLElement>('[data-community-mount]');
     if (!communityMount) throw new Error('Missing Community node surface');
     this.communityPanel.mount(communityMount);
+    this.communityUnsubscribe?.();
+    this.communityUnsubscribe = this.community.subscribe((snapshot) => {
+      this.renderCommunityFlowStatus();
+      const identityKey = snapshot.sensorReady
+        && snapshot.identity?.status === 'active'
+        ? `${snapshot.identity.nodeId}:${snapshot.identity.credentialVersion}`
+        : null;
+      if (identityKey === this.communityDeliveryIdentityKey) return;
+      this.communityDeliveryIdentityKey = identityKey;
+      if (identityKey) void this.retryCommunityFlow();
+    });
 
     root.querySelector<HTMLButtonElement>('[data-start]')?.addEventListener('click', () => void this.startNode());
     root.querySelector<HTMLButtonElement>('[data-stop]')?.addEventListener('click', () => void this.runtime.stop());
@@ -213,7 +236,28 @@ export class NodePanel {
     this.unsubscribe?.();
     this.unsubscribe = this.runtime.subscribe((snapshot) => this.update(snapshot));
     this.renderPilot();
+    this.renderCommunityFlowStatus();
     void this.runtime.inspectStorage(false);
+  }
+
+  runtimeSnapshot(): NodeRuntimeSnapshot {
+    return this.runtime.snapshot();
+  }
+
+  detectorInitialization(): DetectorInitialization | null {
+    return this.pilotPipeline?.getInitialization() ?? null;
+  }
+
+  attachCommunityFlowRuntime(runtime: CommunityFlowRuntime | undefined): void {
+    window.removeEventListener('online', this.onlineHandler);
+    this.communityFlowRuntime?.destroy();
+    this.communityFlowRuntime = runtime ?? null;
+    this.communityFlowError = undefined;
+    if (this.communityFlowRuntime) {
+      window.addEventListener('online', this.onlineHandler);
+      void this.initializeCommunityFlowRuntime();
+    }
+    this.renderCommunityFlowStatus();
   }
 
   /**
@@ -230,12 +274,31 @@ export class NodePanel {
     this.countingGeometryKey = nextKey;
     this.countingGeometry = configuration === undefined ? undefined : structuredClone(configuration);
     this.localCrossings = emptyCrossingCounts();
-    this.pilotPipeline?.setCountingLines(configuration ? [configuration.line] : []);
+    const streamId = configuration ? countingGeometryStreamId(configuration) : undefined;
+    this.pilotPipeline?.setCountingLines(configuration ? [operationalCountingLine(configuration)] : []);
+    if (this.communityFlowRuntime) {
+      void this.communityFlowRuntime.setActiveStream(streamId)
+        .then(() => {
+          this.communityFlowError = undefined;
+          this.renderCommunityFlowStatus();
+        })
+        .catch((error: unknown) => {
+          this.communityFlowError = error instanceof Error ? error.message : String(error);
+          this.renderCommunityFlowStatus();
+        });
+    }
     this.renderCrossings();
+    this.renderCommunityFlowStatus();
   }
 
   destroy(): void {
     this.unsubscribe?.();
+    this.communityUnsubscribe?.();
+    this.communityUnsubscribe = null;
+    this.communityDeliveryIdentityKey = null;
+    window.removeEventListener('online', this.onlineHandler);
+    this.communityFlowRuntime?.destroy();
+    this.communityFlowRuntime = null;
     void this.fieldPilotEvidence?.interruptActive();
     this.inferenceBridge?.detachVideo();
     if (this.inferenceBridge) void this.inferenceBridge.dispose();
@@ -243,6 +306,26 @@ export class NodePanel {
     this.community.destroy();
     this.runtime.destroy();
     this.root = null;
+  }
+
+  private readonly onlineHandler = (): void => {
+    void this.retryCommunityFlow();
+  };
+
+  private async initializeCommunityFlowRuntime(): Promise<void> {
+    const runtime = this.communityFlowRuntime;
+    if (!runtime) return;
+    try {
+      const streamId = this.countingGeometry
+        ? countingGeometryStreamId(this.countingGeometry)
+        : undefined;
+      await runtime.setActiveStream(streamId);
+      await runtime.connectivityRestored();
+      this.communityFlowError = undefined;
+    } catch (error) {
+      this.communityFlowError = error instanceof Error ? error.message : String(error);
+    }
+    this.renderCommunityFlowStatus();
   }
 
   private async startNode(): Promise<void> {
@@ -328,6 +411,7 @@ export class NodePanel {
     setText(root, '[data-hints]', `Arranque automático: ${snapshot.hints.hardwareConcurrency} hilos lógicos · ${snapshot.hints.webgpu ? 'WebGPU disponible' : 'sin WebGPU'}${memory}. El desempeño medido tendrá prioridad sobre estos hints.`);
 
     this.renderPilot();
+    this.renderCommunityFlowStatus();
     const error = root.querySelector<HTMLElement>('[data-error]');
     if (error) {
       const message = snapshot.error ?? this.pilotError;
@@ -393,6 +477,61 @@ export class NodePanel {
       root,
       '[data-crossings-detail]',
       `A→B ${this.localCrossings.aToB} · B→A ${this.localCrossings.bToA} · revisión ${this.countingGeometry.revision} · sólo local`,
+    );
+  }
+
+  private async observeCommunityFlow(frame: EdgeMobilityPipelineFrame): Promise<void> {
+    if (!this.communityFlowRuntime) return;
+    try {
+      await this.communityFlowRuntime.observeFrame(frame);
+      this.communityFlowError = undefined;
+    } catch (error) {
+      this.communityFlowError = error instanceof Error ? error.message : String(error);
+    }
+    this.renderCommunityFlowStatus();
+  }
+
+  private async retryCommunityFlow(): Promise<void> {
+    if (!this.communityFlowRuntime) return;
+    try {
+      await this.communityFlowRuntime.connectivityRestored();
+      this.communityFlowError = undefined;
+    } catch (error) {
+      this.communityFlowError = error instanceof Error ? error.message : String(error);
+    }
+    this.renderCommunityFlowStatus();
+  }
+
+  private renderCommunityFlowStatus(): void {
+    const root = this.root;
+    if (!root) return;
+    const community = this.community.snapshot();
+    if (!community.configured || !this.communityFlowRuntime) {
+      setText(root, '[data-community-flow]', 'no configurado');
+      setText(root, '[data-community-flow-detail]', 'conteo local disponible · sin backend Community');
+      return;
+    }
+    if (this.communityFlowError) {
+      setText(root, '[data-community-flow]', 'error local');
+      setText(root, '[data-community-flow-detail]', `${this.communityFlowError} · buckets/outbox se conservan para reintento`);
+      return;
+    }
+    if (!this.countingGeometry) {
+      setText(root, '[data-community-flow]', 'sin geometría');
+      setText(root, '[data-community-flow-detail]', 'no se generan buckets de flujo');
+      return;
+    }
+    if (!community.sensorReady || community.identity?.status !== 'active') {
+      setText(root, '[data-community-flow]', 'esperando nodo');
+      setText(root, '[data-community-flow-detail]', 'requiere identidad de sensor activa · sin usar sesión humana');
+      return;
+    }
+    const runtime = this.communityFlowRuntime.snapshot();
+    setText(root, '[data-community-flow]', 'agregando');
+    setText(
+      root,
+      '[data-community-flow-detail]',
+      `revisión ${this.countingGeometry.revision} · bucket 5 min · k≥3 · ${runtime.trackedStreamIds.length} stream(s) durable(s) · sólo agregados`,
     );
   }
 
