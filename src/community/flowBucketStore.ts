@@ -28,6 +28,7 @@ export interface CommunityFlowBucketDelta {
 
 export interface CommunityFlowBucketStore {
   add(delta: CommunityFlowBucketDelta): Promise<void>;
+  listStreams(nodeId: string): Promise<string[]>;
   listClosedBucketStarts(nodeId: string, streamId: string, nowMs: number): Promise<number[]>;
   listBucket(nodeId: string, streamId: string, bucketStartMs: number): Promise<CommunityFlowBucketCell[]>;
   deleteBucket(nodeId: string, streamId: string, bucketStartMs: number): Promise<void>;
@@ -126,6 +127,17 @@ export class IndexedDbCommunityFlowBucketStore implements CommunityFlowBucketSto
       qualitySum: (existing?.qualitySum ?? 0) + delta.qualitySum,
     });
     await tx.done;
+  }
+
+  async listStreams(nodeId: string): Promise<string[]> {
+    validateNode(nodeId);
+    const db = await this.dbPromise;
+    const range = IDBKeyRange.bound(
+      [nodeId, '', 0],
+      [nodeId, '\uffff', Number.MAX_SAFE_INTEGER],
+    );
+    const cells = await db.getAllFromIndex('buckets', 'by-node-stream-bucket', range);
+    return [...new Set(cells.map((cell) => cell.streamId))].sort();
   }
 
   async listClosedBucketStarts(nodeId: string, streamId: string, nowMs: number): Promise<number[]> {
