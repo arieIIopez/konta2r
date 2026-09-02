@@ -49,6 +49,9 @@ class MemorySequences implements CommunitySequenceStore {
     this.reservations.set(id, value);
     return value;
   }
+  async release(nodeId: string, publicationKey: string): Promise<void> {
+    this.reservations.delete(`${nodeId}|${publicationKey}`);
+  }
   async peek(nodeId: string): Promise<number | undefined> { return this.nextByNode.get(nodeId); }
 }
 
@@ -118,7 +121,7 @@ describe('Community delivery runtime v2', () => {
     expect(await sequences.peek(current.nodeId)).toBe(2);
   });
 
-  it('reuses one node sequence for the same local publication key', async () => {
+  it('reuses one node sequence for the same local publication key until it is released', async () => {
     const outbox = new MemoryOutbox();
     const sequences = new MemorySequences();
     const current = active('node_delivery04', 'segment-d', 5);
@@ -129,15 +132,20 @@ describe('Community delivery runtime v2', () => {
       sequences,
       nowMs: () => 1_788_000_400_000,
     });
+    const key = 'flow-v2:line:100:200';
 
-    const first = await runtime.enqueue(draft(), { publicationKey: 'flow-v2:line:100:200' });
-    const retry = await runtime.enqueue(draft(), { publicationKey: 'flow-v2:line:100:200' });
+    const first = await runtime.enqueue(draft(), { publicationKey: key });
+    const retry = await runtime.enqueue(draft(), { publicationKey: key });
 
     expect(first.sequence).toBe(0);
     expect(retry.sequence).toBe(0);
     expect(first.id).toBe(retry.id);
     expect(await outbox.count()).toBe(1);
     expect(await sequences.peek(current.nodeId)).toBe(1);
+    expect(sequences.reservations.size).toBe(1);
+
+    await runtime.releasePublication(current.nodeId, key);
+    expect(sequences.reservations.size).toBe(0);
   });
 
   it('does not enqueue or flush when the sensor identity is inactive', async () => {
