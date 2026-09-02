@@ -12,15 +12,20 @@ function publishableKey(): string {
   if (keyMapRaw) {
     try {
       const keyMap = JSON.parse(keyMapRaw) as Record<string, unknown>;
-      const defaultEnvName = keyMap.default;
-      if (typeof defaultEnvName === 'string') {
-        const mapped = Deno.env.get(defaultEnvName)?.trim();
-        if (mapped) return mapped;
+      const defaultKey = keyMap.default;
+      if (typeof defaultKey === 'string' && defaultKey.trim().length > 0) {
+        return defaultKey.trim();
       }
     } catch {
       // Fall through to a clear configuration error.
     }
   }
+
+  // Legacy hosted/local projects can still expose the JWT-based anon key.
+  // It is acceptable here only as the public API key used to call Auth; the
+  // human identity itself is still derived from the Bearer user access token.
+  const legacyAnon = Deno.env.get('SUPABASE_ANON_KEY')?.trim();
+  if (legacyAnon) return legacyAnon;
 
   throw new Error('Missing Supabase publishable key for Auth verification');
 }

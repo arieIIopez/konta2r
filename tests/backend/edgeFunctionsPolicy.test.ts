@@ -23,6 +23,14 @@ describe('Supabase Edge Function policy', () => {
     expect(lifecycleFunction).not.toMatch(/ownerUserId\s*[:=].*body/i);
   });
 
+  it('reads modern hosted publishable keys from the JSON dictionary value itself', () => {
+    expect(authShared).toContain("Deno.env.get('SUPABASE_PUBLISHABLE_KEYS')");
+    expect(authShared).toContain('const defaultKey = keyMap.default');
+    expect(authShared).toContain('return defaultKey.trim()');
+    expect(authShared).not.toMatch(/Deno\.env\.get\(defaultKey\)/);
+    expect(authShared).toContain("Deno.env.get('SUPABASE_ANON_KEY')");
+  });
+
   it('keeps Community sensor authentication in the domain policy rather than accepting human Bearer auth', () => {
     expect(ingestFunction).toContain('evaluateCommunityIngest');
     expect(ingestFunction).toContain("request.headers.get('authorization')");
