@@ -1,5 +1,10 @@
 import { createSupabaseHumanAuth } from '../auth/supabaseBrowser';
+import type { NodeRuntimeController } from '../node/runtimeController';
+import type { EdgeMobilityPipeline } from '../pipeline/edgeMobilityPipeline';
 import { createCommunityDeliveryRuntime } from './deliveryRuntime';
+import { CommunityFlowBucketCollector } from './flowBucketCollector';
+import { CommunityFlowBucketPublisher } from './flowBucketPublisher';
+import { IndexedDbCommunityFlowBucketStore } from './flowBucketStore';
 import { createCommunityHttpSender } from './httpTransport';
 import { IndexedDbNodeIdentityStore } from './indexedDbNodeIdentity';
 import { IndexedDbCommunityOutboxStore } from './indexedDbOutbox';
@@ -12,6 +17,18 @@ export interface BrowserNodeCommunityOptions {
   projectUrl?: string;
   publishableKey?: string;
   appOrigin: string;
+}
+
+export interface BrowserCommunityFlowPublisherOptions {
+  community: NodeCommunityRuntime;
+  runtime: Pick<NodeRuntimeController, 'snapshot'>;
+  pipeline: Pick<EdgeMobilityPipeline, 'getInitialization'>;
+  countingGeometryId: string;
+  softwareVersion: string;
+  methodologyVersion: string;
+  bucketMs?: number;
+  minCount?: number;
+  minEventConfidence?: number;
 }
 
 function usable(value: string | undefined): string | undefined {
@@ -60,5 +77,38 @@ export function createBrowserNodeCommunity(options: BrowserNodeCommunityOptions)
     provisioner,
     sender,
     delivery,
+  });
+}
+
+/**
+ * Creates the durable aggregate-only bridge after a semantic detector pipeline
+ * exists. Returning undefined is intentional for builds without Community
+ * backend configuration; local counting can continue independently.
+ */
+export function createBrowserCommunityFlowPublisher(
+  options: BrowserCommunityFlowPublisherOptions,
+): CommunityFlowBucketPublisher | undefined {
+  const delivery = options.community.delivery();
+  if (!delivery) return undefined;
+
+  const collector = new CommunityFlowBucketCollector(
+    new IndexedDbCommunityFlowBucketStore(),
+    {
+      countingGeometryId: options.countingGeometryId,
+      ...(options.bucketMs === undefined ? {} : { bucketMs: options.bucketMs }),
+      ...(options.minCount === undefined ? {} : { minCount: options.minCount }),
+      ...(options.minEventConfidence === undefined
+        ? {}
+        : { minEventConfidence: options.minEventConfidence }),
+    },
+  );
+
+  return new CommunityFlowBucketPublisher({
+    collector,
+    delivery,
+    runtimeSnapshot: () => options.runtime.snapshot(),
+    detectorInitialization: () => options.pipeline.getInitialization(),
+    softwareVersion: options.softwareVersion,
+    methodologyVersion: options.methodologyVersion,
   });
 }
