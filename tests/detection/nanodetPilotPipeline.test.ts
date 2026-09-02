@@ -8,6 +8,8 @@ class FakeDetector implements Detector {
   detectCalls = 0;
   disposeCalls = 0;
 
+  constructor(private readonly initializeError?: Error) {}
+
   private readonly initialization: DetectorInitialization = {
     model: {
       adapterId: 'nanodet_plus_gfl',
@@ -29,6 +31,7 @@ class FakeDetector implements Detector {
 
   async initialize(): Promise<DetectorInitialization> {
     this.initializeCalls += 1;
+    if (this.initializeError) throw this.initializeError;
     return this.initialization;
   }
 
@@ -58,7 +61,7 @@ class FakeDetector implements Detector {
   }
 
   getInitialization(): DetectorInitialization | null {
-    return this.initializeCalls > 0 ? this.initialization : null;
+    return this.initializeCalls > 0 && !this.initializeError ? this.initialization : null;
   }
 }
 
@@ -132,10 +135,44 @@ describe('NanoDetPilotPipeline', () => {
     await pipeline.dispose();
   });
 
-  it('records loader failures as an explicit pilot error and remains retry-safe only via a new instance', async () => {
+  it('cleans a partially initialized detector and retries successfully in the same pipeline instance', async () => {
+    const failingDetector = new FakeDetector(new Error('pilot runtime initialization failed'));
+    const healthyDetector = new FakeDetector();
+    let loaderCalls = 0;
+    const pipeline = new NanoDetPilotPipeline({
+      sessionId: 'session_retry',
+      loader: async () => {
+        loaderCalls += 1;
+        return loaded(loaderCalls === 1 ? failingDetector : healthyDetector);
+      },
+    });
+
+    await expect(pipeline.initialize()).rejects.toThrow('pilot runtime initialization failed');
+    expect(failingDetector.disposeCalls).toBe(1);
+    expect(pipeline.snapshot()).toEqual({
+      state: 'error',
+      displayName: 'NanoDet piloto',
+      error: 'pilot runtime initialization failed',
+    });
+
+    const initialization = await pipeline.initialize();
+    expect(loaderCalls).toBe(2);
+    expect(healthyDetector.initializeCalls).toBe(1);
+    expect(initialization.runtime.backend).toBe('wasm');
+    expect(pipeline.snapshot().state).toBe('ready');
+
+    await pipeline.dispose();
+    expect(healthyDetector.disposeCalls).toBe(1);
+  });
+
+  it('records loader failures and can retry a transient download failure in the same instance', async () => {
+    const detector = new FakeDetector();
+    let loaderCalls = 0;
     const pipeline = new NanoDetPilotPipeline({
       loader: async () => {
-        throw new Error('pilot download failed');
+        loaderCalls += 1;
+        if (loaderCalls === 1) throw new Error('pilot download failed');
+        return loaded(detector);
       },
     });
 
@@ -145,6 +182,11 @@ describe('NanoDetPilotPipeline', () => {
       displayName: 'NanoDet piloto',
       error: 'pilot download failed',
     });
+
+    await expect(pipeline.initialize()).resolves.toMatchObject({
+      runtime: { backend: 'wasm' },
+    });
+    expect(loaderCalls).toBe(2);
     await pipeline.dispose();
   });
 });
