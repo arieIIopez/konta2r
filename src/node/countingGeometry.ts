@@ -138,6 +138,31 @@ export function createCountingGeometryConfiguration(input: {
   return configuration;
 }
 
+/**
+ * Stable only for one saved geometry revision. A new revision intentionally
+ * receives a new stream id so Community buckets can never mix counts produced
+ * under different physical line placements inside the same time bucket.
+ */
+export function countingGeometryStreamId(
+  configuration: CountingGeometryConfiguration,
+): string {
+  validateCountingGeometryConfiguration(configuration);
+  return `${configuration.configurationId}_r${configuration.revision}`;
+}
+
+/**
+ * Runtime line clone whose id is the revision-scoped stream id used by local
+ * events and Community bucket filtering. The persisted/editor line id remains
+ * human-stable (`line_primary`) and is not mutated.
+ */
+export function operationalCountingLine(
+  configuration: CountingGeometryConfiguration,
+): NormalizedDirectedLine {
+  const line = cloneLine(configuration.line);
+  line.id = countingGeometryStreamId(configuration);
+  return line;
+}
+
 /** Geometry used by CSS `object-fit: cover`, assuming centered object-position. */
 export function videoCoverTransform(
   sourceWidth: number,
