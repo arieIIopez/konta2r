@@ -75,6 +75,23 @@ class MockDetector implements Detector {
 }
 
 const source = {} as CanvasImageSource;
+const mainLine = {
+  id: 'main_line',
+  a: { x: 0.5, y: 0.1 },
+  b: { x: 0.5, y: 0.9 },
+} as const;
+
+async function processFrame(
+  pipeline: EdgeMobilityPipeline,
+  timestampMs: number,
+) {
+  return pipeline.process({
+    source,
+    sourceWidth: 1000,
+    sourceHeight: 500,
+    timestampMs,
+  });
+}
 
 describe('edge mobility pipeline', () => {
   it('turns rider detections into one confirmed cyclist crossing event', async () => {
@@ -87,11 +104,7 @@ describe('edge mobility pipeline', () => {
     ]);
     const pipeline = new EdgeMobilityPipeline(detector, {
       sessionId: 'session_test',
-      countingLines: [{
-        id: 'main_line',
-        a: { x: 0.5, y: 0.1 },
-        b: { x: 0.5, y: 0.9 },
-      }],
+      countingLines: [mainLine],
       counting: {
         deadzoneRelativeToFrameHeight: 0.002,
         pendingConfirmationMs: 1000,
@@ -101,12 +114,7 @@ describe('edge mobility pipeline', () => {
 
     const frames = [];
     for (let index = 0; index < 3; index += 1) {
-      frames.push(await pipeline.process({
-        source,
-        sourceWidth: 1000,
-        sourceHeight: 500,
-        timestampMs: 1000 + index * 200,
-      }));
+      frames.push(await processFrame(pipeline, 1000 + index * 200));
     }
 
     expect(frames[0]?.fusion.entities).toHaveLength(1);
@@ -118,5 +126,110 @@ describe('edge mobility pipeline', () => {
     expect(frames[2]?.crossings[0]?.entityType).toBe('cyclist');
     expect(frames[2]?.crossings[0]?.crossingPoint.x).toBeCloseTo(0.5, 6);
     expect(frames[2]?.crossings[0]?.crossingPointSpace).toBe('normalized_image');
+    await pipeline.dispose();
+  });
+
+  it('enables and disables operational counting geometry at runtime', async () => {
+    const detector = new MockDetector([
+      riderFrame(420),
+      riderFrame(470),
+      riderFrame(530),
+      riderFrame(420),
+      riderFrame(470),
+      riderFrame(530),
+      riderFrame(420),
+      riderFrame(470),
+      riderFrame(530),
+    ]);
+    const pipeline = new EdgeMobilityPipeline(detector, {
+      sessionId: 'session_dynamic',
+      counting: {
+        deadzoneRelativeToFrameHeight: 0.002,
+        pendingConfirmationMs: 1000,
+      },
+    });
+    await pipeline.initialize();
+
+    const disabledFrames = [
+      await processFrame(pipeline, 1000),
+      await processFrame(pipeline, 1200),
+      await processFrame(pipeline, 1400),
+    ];
+    expect(disabledFrames.flatMap((frame) => frame.crossings)).toEqual([]);
+    expect(pipeline.getCountingLines()).toEqual([]);
+
+    pipeline.setCountingLines([mainLine]);
+    expect(pipeline.getCountingLines()).toEqual([mainLine]);
+    const enabledFrames = [
+      await processFrame(pipeline, 2000),
+      await processFrame(pipeline, 2200),
+      await processFrame(pipeline, 2400),
+    ];
+    expect(enabledFrames.flatMap((frame) => frame.crossings)).toHaveLength(1);
+
+    pipeline.setCountingLines([]);
+    const disabledAgain = [
+      await processFrame(pipeline, 3000),
+      await processFrame(pipeline, 3200),
+      await processFrame(pipeline, 3400),
+    ];
+    expect(disabledAgain.flatMap((frame) => frame.crossings)).toEqual([]);
+    expect(pipeline.getCountingLines()).toEqual([]);
+    await pipeline.dispose();
+  });
+
+  it('resets tracker history before a replacement geometry can observe frames', async () => {
+    const detector = new MockDetector([
+      riderFrame(420),
+      riderFrame(470),
+      riderFrame(530),
+    ]);
+    const pipeline = new EdgeMobilityPipeline(detector, {
+      sessionId: 'session_replace',
+      countingLines: [mainLine],
+      counting: {
+        deadzoneRelativeToFrameHeight: 0.002,
+        pendingConfirmationMs: 1000,
+      },
+    });
+    await pipeline.initialize();
+
+    await processFrame(pipeline, 1000);
+    await processFrame(pipeline, 1200);
+
+    const replacement = {
+      id: 'replacement_line',
+      a: { x: 0.5, y: 0.08 },
+      b: { x: 0.5, y: 0.92 },
+    } as const;
+    pipeline.setCountingLines([replacement]);
+
+    // Without a tracker reset the next point could complete the old trajectory
+    // across x=0.5. A clean geometry epoch must instead start with no crossing.
+    const firstReplacementFrame = await processFrame(pipeline, 1400);
+    expect(firstReplacementFrame.crossings).toEqual([]);
+    expect(firstReplacementFrame.tracking.confirmedTracks).toHaveLength(0);
+    expect(pipeline.getCountingLines()).toEqual([replacement]);
+    await pipeline.dispose();
+  });
+
+  it('clones runtime geometry so caller mutation cannot alter the active line', async () => {
+    const detector = new MockDetector([riderFrame(420)]);
+    const pipeline = new EdgeMobilityPipeline(detector, { sessionId: 'session_clone' });
+    await pipeline.initialize();
+
+    const mutableLine = {
+      id: 'mutable',
+      a: { x: 0.25, y: 0.1 },
+      b: { x: 0.25, y: 0.9 },
+    };
+    pipeline.setCountingLines([mutableLine]);
+    mutableLine.a.x = 0.8;
+
+    expect(pipeline.getCountingLines()[0]?.a.x).toBe(0.25);
+    const returned = pipeline.getCountingLines();
+    if (returned[0]) returned[0].a.x = 0.9;
+    expect(pipeline.getCountingLines()[0]?.a.x).toBe(0.25);
+    await pipeline.dispose();
   });
 });
