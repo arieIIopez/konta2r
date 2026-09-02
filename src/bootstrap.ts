@@ -73,7 +73,12 @@ async function bootstrap(): Promise<void> {
     publishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
     appOrigin: window.location.origin,
   });
-  const panel = new NodePanel(pwa, community);
+  const experimentalDetector = import.meta.env.VITE_KONTA2R_EXPERIMENTAL_DETECTOR === 'nanodet'
+    ? 'nanodet' as const
+    : undefined;
+  const panel = new NodePanel(pwa, community, {
+    ...(experimentalDetector === undefined ? {} : { experimentalDetector }),
+  });
   panel.mount(mount);
   window.addEventListener('beforeunload', () => panel.destroy(), { once: true });
 }
