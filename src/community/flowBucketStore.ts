@@ -1,9 +1,11 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { isValidNodeId } from '../backend/nodeCredential';
 import type { EntityType } from '../core/types';
 import type { CommunityDirection } from './protocol';
 
 export interface CommunityFlowBucketCell {
   id: string;
+  nodeId: string;
   streamId: string;
   bucketStartMs: number;
   bucketEndMs: number;
@@ -14,6 +16,7 @@ export interface CommunityFlowBucketCell {
 }
 
 export interface CommunityFlowBucketDelta {
+  nodeId: string;
   streamId: string;
   bucketStartMs: number;
   bucketEndMs: number;
@@ -25,9 +28,9 @@ export interface CommunityFlowBucketDelta {
 
 export interface CommunityFlowBucketStore {
   add(delta: CommunityFlowBucketDelta): Promise<void>;
-  listClosedBucketStarts(streamId: string, nowMs: number): Promise<number[]>;
-  listBucket(streamId: string, bucketStartMs: number): Promise<CommunityFlowBucketCell[]>;
-  deleteBucket(streamId: string, bucketStartMs: number): Promise<void>;
+  listClosedBucketStarts(nodeId: string, streamId: string, nowMs: number): Promise<number[]>;
+  listBucket(nodeId: string, streamId: string, bucketStartMs: number): Promise<CommunityFlowBucketCell[]>;
+  deleteBucket(nodeId: string, streamId: string, bucketStartMs: number): Promise<void>;
 }
 
 interface Konta2rCommunityBucketSchema extends DBSchema {
@@ -35,24 +38,30 @@ interface Konta2rCommunityBucketSchema extends DBSchema {
     key: string;
     value: CommunityFlowBucketCell;
     indexes: {
-      'by-stream-bucket': [string, number];
+      'by-node-stream-bucket': [string, string, number];
     };
   };
 }
 
 const DB_NAME = 'Konta2rCommunityBucketsDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export function communityFlowBucketCellId(
+  nodeId: string,
   streamId: string,
   bucketStartMs: number,
   entityType: EntityType,
   direction: CommunityDirection,
 ): string {
-  return [streamId, bucketStartMs, entityType, direction].join('|');
+  return [nodeId, streamId, bucketStartMs, entityType, direction].join('|');
+}
+
+function validateNode(nodeId: string): void {
+  if (!isValidNodeId(nodeId)) throw new Error('Invalid Konta2r node id for Community bucket');
 }
 
 function validateDelta(delta: CommunityFlowBucketDelta): void {
+  validateNode(delta.nodeId);
   if (!delta.streamId.trim()) throw new Error('Community bucket streamId is required');
   if (!Number.isSafeInteger(delta.bucketStartMs) || delta.bucketStartMs < 0) {
     throw new Error('Community bucket start must be a non-negative integer');
@@ -71,16 +80,23 @@ function validateDelta(delta: CommunityFlowBucketDelta): void {
 /**
  * Persists only already-reduced counters. No track/event id, exact crossing
  * timestamp, pixel coordinate or frame data is written to this database.
+ * Buckets are identity-scoped so a reprovisioned phone cannot publish counters
+ * observed under a previous node/segment identity.
  */
 export class IndexedDbCommunityFlowBucketStore implements CommunityFlowBucketStore {
   private readonly dbPromise: Promise<IDBPDatabase<Konta2rCommunityBucketSchema>>;
 
   constructor(name = DB_NAME) {
     this.dbPromise = openDB<Konta2rCommunityBucketSchema>(name, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion) {
+        // v1 buckets were not bound to a node identity. They are intentionally
+        // discarded rather than risking attribution to a later provisioned node.
+        if (oldVersion < 2 && db.objectStoreNames.contains('buckets')) {
+          db.deleteObjectStore('buckets');
+        }
         if (!db.objectStoreNames.contains('buckets')) {
           const store = db.createObjectStore('buckets', { keyPath: 'id' });
-          store.createIndex('by-stream-bucket', ['streamId', 'bucketStartMs']);
+          store.createIndex('by-node-stream-bucket', ['nodeId', 'streamId', 'bucketStartMs']);
         }
       },
     });
@@ -89,6 +105,7 @@ export class IndexedDbCommunityFlowBucketStore implements CommunityFlowBucketSto
   async add(delta: CommunityFlowBucketDelta): Promise<void> {
     validateDelta(delta);
     const id = communityFlowBucketCellId(
+      delta.nodeId,
       delta.streamId,
       delta.bucketStartMs,
       delta.entityType,
@@ -99,6 +116,7 @@ export class IndexedDbCommunityFlowBucketStore implements CommunityFlowBucketSto
     const existing = await tx.store.get(id);
     await tx.store.put({
       id,
+      nodeId: delta.nodeId,
       streamId: delta.streamId,
       bucketStartMs: delta.bucketStartMs,
       bucketEndMs: delta.bucketEndMs,
@@ -110,12 +128,13 @@ export class IndexedDbCommunityFlowBucketStore implements CommunityFlowBucketSto
     await tx.done;
   }
 
-  async listClosedBucketStarts(streamId: string, nowMs: number): Promise<number[]> {
+  async listClosedBucketStarts(nodeId: string, streamId: string, nowMs: number): Promise<number[]> {
+    validateNode(nodeId);
     if (!streamId.trim()) throw new Error('Community bucket streamId is required');
     if (!Number.isSafeInteger(nowMs) || nowMs < 0) throw new Error('Community bucket clock is invalid');
     const db = await this.dbPromise;
-    const range = IDBKeyRange.bound([streamId, 0], [streamId, nowMs]);
-    const cells = await db.getAllFromIndex('buckets', 'by-stream-bucket', range);
+    const range = IDBKeyRange.bound([nodeId, streamId, 0], [nodeId, streamId, nowMs]);
+    const cells = await db.getAllFromIndex('buckets', 'by-node-stream-bucket', range);
     return [...new Set(
       cells
         .filter((cell) => cell.bucketEndMs <= nowMs)
@@ -123,20 +142,26 @@ export class IndexedDbCommunityFlowBucketStore implements CommunityFlowBucketSto
     )].sort((a, b) => a - b);
   }
 
-  async listBucket(streamId: string, bucketStartMs: number): Promise<CommunityFlowBucketCell[]> {
+  async listBucket(
+    nodeId: string,
+    streamId: string,
+    bucketStartMs: number,
+  ): Promise<CommunityFlowBucketCell[]> {
+    validateNode(nodeId);
     const db = await this.dbPromise;
     return db.getAllFromIndex(
       'buckets',
-      'by-stream-bucket',
-      IDBKeyRange.only([streamId, bucketStartMs]),
+      'by-node-stream-bucket',
+      IDBKeyRange.only([nodeId, streamId, bucketStartMs]),
     );
   }
 
-  async deleteBucket(streamId: string, bucketStartMs: number): Promise<void> {
+  async deleteBucket(nodeId: string, streamId: string, bucketStartMs: number): Promise<void> {
+    validateNode(nodeId);
     const db = await this.dbPromise;
     const tx = db.transaction('buckets', 'readwrite');
-    let cursor = await tx.store.index('by-stream-bucket').openCursor(
-      IDBKeyRange.only([streamId, bucketStartMs]),
+    let cursor = await tx.store.index('by-node-stream-bucket').openCursor(
+      IDBKeyRange.only([nodeId, streamId, bucketStartMs]),
     );
     while (cursor) {
       await cursor.delete();
