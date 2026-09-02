@@ -1,6 +1,15 @@
 import './countingGeometry.css';
+import type { CountingGeometryConfiguration } from './countingGeometry';
 import { CountingGeometryEditor, type CountingGeometryEditorSnapshot } from './countingGeometryEditor';
 import { IndexedDbCountingGeometryStore } from './indexedDbCountingGeometry';
+
+export interface CountingGeometryPanelOptions {
+  /**
+   * Receives only operational geometry. Editing temporarily emits undefined so
+   * the runtime cannot keep counting on an old line hidden behind a moving draft.
+   */
+  onOperationalGeometryChange?: (configuration: CountingGeometryConfiguration | undefined) => void;
+}
 
 function setText(root: HTMLElement, selector: string, value: string): void {
   const element = root.querySelector<HTMLElement>(selector);
@@ -12,8 +21,16 @@ export class CountingGeometryPanel {
     store: new IndexedDbCountingGeometryStore(),
     lineId: 'line_primary',
   });
+  private readonly onOperationalGeometryChange:
+    | ((configuration: CountingGeometryConfiguration | undefined) => void)
+    | undefined;
   private controls: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
+  private lastOperationalKey: string | null = null;
+
+  constructor(options: CountingGeometryPanelOptions = {}) {
+    this.onOperationalGeometryChange = options.onOperationalGeometryChange;
+  }
 
   mount(nodeRoot: HTMLElement): void {
     this.destroy();
@@ -40,7 +57,7 @@ export class CountingGeometryPanel {
         <button class="action" type="button" data-geometry-cancel>Cancelar</button>
         <button class="action danger" type="button" data-geometry-clear>Borrar línea</button>
       </div>
-      <p class="counting-geometry-help">Arrastra sobre la imagen desde un extremo al otro. La flecha fija la orientación de referencia; <strong>A</strong> y <strong>B</strong> son los dos lados de cruce. Los conteos A→B y B→A son transversales a la línea, no movimientos a lo largo de ella.</p>
+      <p class="counting-geometry-help">Arrastra sobre la imagen desde un extremo al otro. La flecha fija la orientación de referencia; <strong>A</strong> y <strong>B</strong> son los dos lados de cruce. Los conteos A→B y B→A son transversales a la línea, no movimientos a lo largo de ella. <strong>Mientras editas, el conteo local queda pausado.</strong></p>
       <p class="counting-geometry-error hidden" data-geometry-error></p>
     `;
     runtimeControls.insertAdjacentElement('afterend', controls);
@@ -70,6 +87,7 @@ export class CountingGeometryPanel {
     this.editor.destroy();
     this.controls?.remove();
     this.controls = null;
+    this.lastOperationalKey = null;
   }
 
   private render(snapshot: CountingGeometryEditorSnapshot): void {
@@ -88,9 +106,9 @@ export class CountingGeometryPanel {
     } else if (snapshot.editing) {
       setText(controls, '[data-geometry-title]', snapshot.dirty ? 'Línea en edición' : 'Editando línea');
       setText(controls, '[data-geometry-detail]', line
-        ? `A (${line.a.x.toFixed(3)}, ${line.a.y.toFixed(3)}) · B (${line.b.x.toFixed(3)}, ${line.b.y.toFixed(3)})`
-        : 'Arrastra sobre la cámara para definir la línea.');
-      if (status) status.textContent = '● edición';
+        ? `A (${line.a.x.toFixed(3)}, ${line.a.y.toFixed(3)}) · B (${line.b.x.toFixed(3)}, ${line.b.y.toFixed(3)}) · conteo pausado`
+        : 'Arrastra sobre la cámara para definir la línea. Conteo pausado.');
+      if (status) status.textContent = '● edición · pausado';
     } else if (configuration) {
       setText(controls, '[data-geometry-title]', `Geometría ${configuration.configurationId.slice(-8)}`);
       setText(controls, '[data-geometry-detail]', `revisión ${revision ?? '—'} · referencia ${Math.round(configuration.referenceFrame.width)}×${Math.round(configuration.referenceFrame.height)} · guardada ${new Date(configuration.updatedAtIso).toLocaleString()}`);
@@ -118,5 +136,22 @@ export class CountingGeometryPanel {
       error.textContent = snapshot.error ?? '';
       error.classList.toggle('hidden', snapshot.error === undefined);
     }
+
+    this.publishOperationalGeometry(snapshot);
+  }
+
+  private publishOperationalGeometry(snapshot: CountingGeometryEditorSnapshot): void {
+    if (!snapshot.loaded || !this.onOperationalGeometryChange) return;
+    const operational = snapshot.editing ? undefined : snapshot.configuration;
+    const key = snapshot.editing
+      ? 'paused'
+      : operational
+        ? `${operational.configurationId}:${operational.revision}`
+        : 'none';
+    if (key === this.lastOperationalKey) return;
+    this.lastOperationalKey = key;
+    this.onOperationalGeometryChange(
+      operational === undefined ? undefined : structuredClone(operational),
+    );
   }
 }
