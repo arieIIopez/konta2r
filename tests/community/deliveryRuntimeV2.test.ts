@@ -34,10 +34,19 @@ class MemoryOutbox implements CommunityOutboxStore {
 
 class MemorySequences implements CommunitySequenceStore {
   readonly nextByNode = new Map<string, number>();
+  readonly reservations = new Map<string, number>();
 
   async next(nodeId: string): Promise<number> {
     const value = this.nextByNode.get(nodeId) ?? 0;
     this.nextByNode.set(nodeId, value + 1);
+    return value;
+  }
+  async reserve(nodeId: string, publicationKey: string): Promise<number> {
+    const id = `${nodeId}|${publicationKey}`;
+    const existing = this.reservations.get(id);
+    if (existing !== undefined) return existing;
+    const value = await this.next(nodeId);
+    this.reservations.set(id, value);
     return value;
   }
   async peek(nodeId: string): Promise<number | undefined> { return this.nextByNode.get(nodeId); }
@@ -107,6 +116,28 @@ describe('Community delivery runtime v2', () => {
     expect(second.sequence).toBe(1);
     expect(first.payload.observedSegment).toEqual({ segmentId: 'segment-alameda-01', source: 'konta2r' });
     expect(await sequences.peek(current.nodeId)).toBe(2);
+  });
+
+  it('reuses one node sequence for the same local publication key', async () => {
+    const outbox = new MemoryOutbox();
+    const sequences = new MemorySequences();
+    const current = active('node_delivery04', 'segment-d', 5);
+    const runtime = createCommunityDeliveryRuntime({
+      endpoint: 'https://example.test/ingest',
+      activeNode: async () => current,
+      outbox,
+      sequences,
+      nowMs: () => 1_788_000_400_000,
+    });
+
+    const first = await runtime.enqueue(draft(), { publicationKey: 'flow-v2:line:100:200' });
+    const retry = await runtime.enqueue(draft(), { publicationKey: 'flow-v2:line:100:200' });
+
+    expect(first.sequence).toBe(0);
+    expect(retry.sequence).toBe(0);
+    expect(first.id).toBe(retry.id);
+    expect(await outbox.count()).toBe(1);
+    expect(await sequences.peek(current.nodeId)).toBe(1);
   });
 
   it('does not enqueue or flush when the sensor identity is inactive', async () => {
