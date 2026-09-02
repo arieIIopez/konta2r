@@ -24,6 +24,7 @@ describe('node health monitor', () => {
     const snapshot = monitor.snapshot(now);
 
     expect(snapshot.observedFps).toBeCloseTo(5, 1);
+    expect(snapshot.inferenceFpsP50).toBeCloseTo(5, 1);
     expect(snapshot.droppedFrameRatio).toBeLessThan(0.03);
     expect(snapshot.loadPressure).toBe('nominal');
   });
@@ -34,8 +35,22 @@ describe('node health monitor', () => {
     const snapshot = monitor.snapshot(now);
 
     expect(snapshot.observedFps).toBeCloseTo(4, 1);
+    expect(snapshot.inferenceFpsP50).toBeCloseTo(4, 1);
     expect(snapshot.droppedFrameRatio).toBeGreaterThan(0.5);
     expect(snapshot.loadPressure).toBe('critical');
+  });
+
+  it('computes median cadence independently from the window-average FPS', () => {
+    const monitor = new NodeHealthMonitor({ expectedFps: 5, windowMs: 60_000 });
+    monitor.record({ timestampMs: 0, processingMs: 40 });
+    monitor.record({ timestampMs: 100, processingMs: 40 });
+    monitor.record({ timestampMs: 300, processingMs: 40 });
+    monitor.record({ timestampMs: 500, processingMs: 40 });
+    monitor.record({ timestampMs: 700, processingMs: 40 });
+
+    const snapshot = monitor.snapshot(700);
+    expect(snapshot.inferenceFpsP50).toBeCloseTo(5, 1);
+    expect(snapshot.observedFps).toBeCloseTo(5.71, 1);
   });
 
   it('detects latency drift without claiming physical temperature', () => {
