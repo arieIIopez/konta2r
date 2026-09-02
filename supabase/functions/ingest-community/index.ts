@@ -1,6 +1,7 @@
 import { evaluateCommunityIngest } from '../../../src/backend/communityIngest.ts';
+import { pepperForKeyVersion } from '../_shared/credentialPepper.ts';
 import { createPostgresCommunityIngestStore } from '../_shared/postgresStores.ts';
-import { createEdgeSql, pepperForKeyVersion } from '../_shared/postgres.ts';
+import { createEdgeSql } from '../_shared/postgres.ts';
 import {
   jsonResponse,
   optionsResponse,
@@ -34,7 +35,7 @@ Deno.serve(async (request: Request) => {
       body,
     }, {
       store,
-      pepperForKeyVersion,
+      pepperForKeyVersion: (keyVersion) => pepperForKeyVersion(sql, keyVersion),
     });
 
     return jsonResponse({
@@ -43,7 +44,6 @@ Deno.serve(async (request: Request) => {
       ...(decision.batchId === undefined ? {} : { batchId: decision.batchId }),
     }, decision.statusCode);
   } catch {
-    // The outbox treats 5xx as retryable. Do not expose SQL or secret details.
     console.error('ingest-community failed after request authentication/validation');
     return jsonResponse({ code: 'community_ingest_unavailable' }, 503);
   }
