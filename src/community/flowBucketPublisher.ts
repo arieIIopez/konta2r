@@ -14,6 +14,8 @@ type FlowBucketCollectorPort = Pick<CommunityFlowBucketCollector, 'observe' | 'c
 export interface CommunityFlowBucketPublisherOptions {
   collector: FlowBucketCollectorPort;
   delivery: CommunityDeliveryRuntime;
+  /** Redacted identity only. Never return or capture a raw sensor credential here. */
+  activeNodeId: () => string | undefined;
   runtimeSnapshot: () => NodeRuntimeSnapshot;
   detectorInitialization: () => DetectorInitialization | null;
   softwareVersion: string;
@@ -28,7 +30,7 @@ export interface CommunityFlowPublishResult {
   suppressedBuckets: number;
   retainedBuckets: number;
   flush: CommunityDeliveryFlushResult;
-  skipped?: 'model_unavailable' | 'enqueue_unavailable';
+  skipped?: 'node_inactive' | 'model_unavailable' | 'enqueue_unavailable';
 }
 
 function validEpoch(value: number): number {
@@ -48,6 +50,7 @@ function emptyFlush(): CommunityDeliveryFlushResult {
 function publicationKey(bucket: ClosedCommunityFlowBucket): string {
   return [
     'flow-v2',
+    bucket.nodeId,
     bucket.streamId,
     bucket.bucketStartMs,
     bucket.bucketEndMs,
@@ -62,6 +65,7 @@ function publicationKey(bucket: ClosedCommunityFlowBucket): string {
 export class CommunityFlowBucketPublisher {
   private readonly collector: FlowBucketCollectorPort;
   private readonly delivery: CommunityDeliveryRuntime;
+  private readonly activeNodeId: () => string | undefined;
   private readonly runtimeSnapshot: () => NodeRuntimeSnapshot;
   private readonly detectorInitialization: () => DetectorInitialization | null;
   private readonly softwareVersion: string;
@@ -74,6 +78,7 @@ export class CommunityFlowBucketPublisher {
   constructor(options: CommunityFlowBucketPublisherOptions) {
     this.collector = options.collector;
     this.delivery = options.delivery;
+    this.activeNodeId = options.activeNodeId;
     this.runtimeSnapshot = options.runtimeSnapshot;
     this.detectorInitialization = options.detectorInitialization;
     this.softwareVersion = options.softwareVersion.trim();
@@ -87,7 +92,10 @@ export class CommunityFlowBucketPublisher {
   observeFrame(frame: EdgeMobilityPipelineFrame, observedAtEpochMs = this.nowMs()): Promise<void> {
     const observedAt = validEpoch(observedAtEpochMs);
     return this.serialize(async () => {
-      if (frame.crossings.length > 0) await this.collector.observe(frame.crossings, observedAt);
+      const nodeId = this.activeNodeId();
+      if (nodeId && frame.crossings.length > 0) {
+        await this.collector.observe(nodeId, frame.crossings, observedAt);
+      }
       if (observedAt - this.lastPublicationCheckMs >= this.publicationCheckIntervalMs) {
         this.lastPublicationCheckMs = observedAt;
         await this.publishClosedInternal(observedAt);
@@ -106,15 +114,40 @@ export class CommunityFlowBucketPublisher {
   }
 
   private async publishClosedInternal(now: number): Promise<CommunityFlowPublishResult> {
-    const buckets = await this.collector.closed(now);
+    const nodeId = this.activeNodeId();
+    if (!nodeId) {
+      let flush = emptyFlush();
+      try {
+        flush = await this.delivery.flush({ nowMs: now });
+      } catch {
+        // No active node means no bucket can be attributed or sent. Durable state remains untouched.
+      }
+      return {
+        closedBuckets: 0,
+        enqueuedBuckets: 0,
+        suppressedBuckets: 0,
+        retainedBuckets: 0,
+        flush,
+        skipped: 'node_inactive',
+      };
+    }
+
+    const buckets = await this.collector.closed(nodeId, now);
     let enqueuedBuckets = 0;
     let suppressedBuckets = 0;
     let retainedBuckets = 0;
     let skipped: CommunityFlowPublishResult['skipped'];
 
     for (const bucket of buckets) {
+      // Defense in depth for custom/legacy collectors: never publish a bucket
+      // that claims a different node than the redacted identity selected above.
+      if (bucket.nodeId !== nodeId) {
+        retainedBuckets += 1;
+        skipped = 'enqueue_unavailable';
+        continue;
+      }
       if (bucket.records.length === 0) {
-        await this.collector.commit(bucket.bucketStartMs);
+        await this.collector.commit(nodeId, bucket.bucketStartMs);
         suppressedBuckets += 1;
         continue;
       }
@@ -138,11 +171,15 @@ export class CommunityFlowBucketPublisher {
           records: bucket.records,
         }, {
           publicationKey: key,
+          expectedNodeId: bucket.nodeId,
         });
+        if (item.nodeId !== bucket.nodeId) {
+          throw new Error('Community outbox node does not match source bucket node');
+        }
         // Deleting the source bucket only after durable outbox enqueue gives
         // at-least-once local publication. The reservation key makes a crash
         // between these two operations idempotent on retry.
-        await this.collector.commit(bucket.bucketStartMs);
+        await this.collector.commit(nodeId, bucket.bucketStartMs);
         enqueuedBuckets += 1;
         // Once the source bucket is gone it can no longer be republished, so its
         // temporary reservation can be retired. Failure here is only local
