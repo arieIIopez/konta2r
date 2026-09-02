@@ -19,6 +19,7 @@ function snapshot(
     health: {
       sampleCount: 0,
       observedFps: 0,
+      inferenceFpsP50: 0,
       processingLatencyP95Ms: 0,
       droppedFrameRatio: 0,
       latencyDriftRatio: 0,

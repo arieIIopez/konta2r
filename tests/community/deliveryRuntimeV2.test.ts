@@ -34,11 +34,23 @@ class MemoryOutbox implements CommunityOutboxStore {
 
 class MemorySequences implements CommunitySequenceStore {
   readonly nextByNode = new Map<string, number>();
+  readonly reservations = new Map<string, number>();
 
   async next(nodeId: string): Promise<number> {
     const value = this.nextByNode.get(nodeId) ?? 0;
     this.nextByNode.set(nodeId, value + 1);
     return value;
+  }
+  async reserve(nodeId: string, publicationKey: string): Promise<number> {
+    const id = `${nodeId}|${publicationKey}`;
+    const existing = this.reservations.get(id);
+    if (existing !== undefined) return existing;
+    const value = await this.next(nodeId);
+    this.reservations.set(id, value);
+    return value;
+  }
+  async release(nodeId: string, publicationKey: string): Promise<void> {
+    this.reservations.delete(`${nodeId}|${publicationKey}`);
   }
   async peek(nodeId: string): Promise<number | undefined> { return this.nextByNode.get(nodeId); }
 }
@@ -109,6 +121,33 @@ describe('Community delivery runtime v2', () => {
     expect(await sequences.peek(current.nodeId)).toBe(2);
   });
 
+  it('reuses one node sequence for the same local publication key until it is released', async () => {
+    const outbox = new MemoryOutbox();
+    const sequences = new MemorySequences();
+    const current = active('node_delivery04', 'segment-d', 5);
+    const runtime = createCommunityDeliveryRuntime({
+      endpoint: 'https://example.test/ingest',
+      activeNode: async () => current,
+      outbox,
+      sequences,
+      nowMs: () => 1_788_000_400_000,
+    });
+    const key = 'flow-v2:line:100:200';
+
+    const first = await runtime.enqueue(draft(), { publicationKey: key });
+    const retry = await runtime.enqueue(draft(), { publicationKey: key });
+
+    expect(first.sequence).toBe(0);
+    expect(retry.sequence).toBe(0);
+    expect(first.id).toBe(retry.id);
+    expect(await outbox.count()).toBe(1);
+    expect(await sequences.peek(current.nodeId)).toBe(1);
+    expect(sequences.reservations.size).toBe(1);
+
+    await runtime.releasePublication(current.nodeId, key);
+    expect(sequences.reservations.size).toBe(0);
+  });
+
   it('does not enqueue or flush when the sensor identity is inactive', async () => {
     const outbox = new MemoryOutbox();
     const runtime = createCommunityDeliveryRuntime({
@@ -127,6 +166,28 @@ describe('Community delivery runtime v2', () => {
       skipped: 'node_inactive',
     });
     expect(await outbox.count()).toBe(0);
+  });
+
+  it('rejects enqueue if the active identity no longer matches the source bucket node', async () => {
+    const outbox = new MemoryOutbox();
+    const sequences = new MemorySequences();
+    const current = active('node_delivery02', 'segment-b', 8);
+    const runtime = createCommunityDeliveryRuntime({
+      endpoint: 'https://example.test/ingest',
+      activeNode: async () => current,
+      outbox,
+      sequences,
+      nowMs: () => 1_788_000_400_000,
+    });
+
+    await expect(runtime.enqueue(draft(), {
+      publicationKey: 'flow-v2:node_delivery01:line:100:200',
+      expectedNodeId: 'node_delivery01',
+    })).rejects.toThrow(/changed before Community enqueue/i);
+
+    expect(await outbox.count()).toBe(0);
+    expect(await sequences.peek(current.nodeId)).toBeUndefined();
+    expect(sequences.reservations.size).toBe(0);
   });
 
   it('flushes only the currently active node after identity changes', async () => {

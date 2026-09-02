@@ -44,6 +44,10 @@ export class EdgeMobilityPipeline {
     return this.frameProcessor.initialize();
   }
 
+  getInitialization(): DetectorInitialization | null {
+    return this.frameProcessor.getInitialization();
+  }
+
   async process(input: DetectorInput): Promise<EdgeMobilityPipelineFrame> {
     const frame = await this.frameProcessor.process(input);
     const crossings = this.countingEngine?.update(
