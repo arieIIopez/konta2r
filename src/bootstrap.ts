@@ -86,7 +86,9 @@ async function bootstrap(): Promise<void> {
     ...(pilotPipelineFactory === undefined ? {} : { pilotPipelineFactory }),
   });
   panel.mount(mount);
-  const geometryPanel = new CountingGeometryPanel();
+  const geometryPanel = new CountingGeometryPanel({
+    onOperationalGeometryChange: (configuration) => panel.setCountingGeometry(configuration),
+  });
   geometryPanel.mount(mount);
   window.addEventListener('beforeunload', () => {
     geometryPanel.destroy();

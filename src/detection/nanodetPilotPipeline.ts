@@ -1,3 +1,4 @@
+import type { NormalizedDirectedLine } from '../geometry/normalized';
 import type { EdgeMobilityPipelineFrame } from '../pipeline/edgeMobilityPipeline';
 import { EdgeMobilityPipeline } from '../pipeline/edgeMobilityPipeline';
 import type { NodePilotPipeline, NodePilotPipelineSnapshot } from '../node/pilotPipeline';
@@ -28,11 +29,20 @@ function normalizeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function cloneLines(lines: readonly NormalizedDirectedLine[]): NormalizedDirectedLine[] {
+  return lines.map((line) => ({
+    ...line,
+    a: { ...line.a },
+    b: { ...line.b },
+  }));
+}
+
 /**
  * Lazy semantic processor used by RuntimeInferenceBridge. The external model is
  * not downloaded until the user actually starts the node and inference needs to
- * initialize. No counting line is injected here: this stage measures detector,
- * fusion and tracking behavior without inventing a camera geometry.
+ * initialize. Counting geometry may be supplied before or after initialization;
+ * every runtime replacement is delegated to EdgeMobilityPipeline's reset-safe
+ * geometry boundary.
  */
 export class NanoDetPilotPipeline implements NodePilotPipeline {
   private readonly options: NanoDetPilotPipelineOptions;
@@ -40,6 +50,7 @@ export class NanoDetPilotPipeline implements NodePilotPipeline {
   private pipeline: EdgeMobilityPipeline | null = null;
   private initialization: DetectorInitialization | null = null;
   private initializationPromise: Promise<DetectorInitialization> | null = null;
+  private countingLines: NormalizedDirectedLine[] = [];
   private state: NodePilotPipelineSnapshot = {
     state: 'idle',
     displayName: PILOT_NAME,
@@ -57,6 +68,17 @@ export class NanoDetPilotPipeline implements NodePilotPipeline {
 
   getInitialization(): DetectorInitialization | null {
     return this.initialization;
+  }
+
+  setCountingLines(lines: readonly NormalizedDirectedLine[]): void {
+    if (this.disposed) return;
+    this.countingLines = cloneLines(lines);
+    this.pipeline?.setCountingLines(this.countingLines);
+  }
+
+  resetTrackingAndEvents(): void {
+    if (this.disposed) return;
+    this.pipeline?.resetTrackingAndEvents();
   }
 
   initialize(): Promise<DetectorInitialization> {
@@ -90,6 +112,7 @@ export class NanoDetPilotPipeline implements NodePilotPipeline {
     this.pipeline = null;
     this.initialization = null;
     this.initializationPromise = null;
+    this.countingLines = [];
     this.state = { state: 'disposed', displayName: PILOT_NAME };
   }
 
@@ -104,6 +127,7 @@ export class NanoDetPilotPipeline implements NodePilotPipeline {
 
       candidatePipeline = new EdgeMobilityPipeline(loaded.detector, {
         sessionId: this.options.sessionId ?? localSessionId(),
+        ...(this.countingLines.length === 0 ? {} : { countingLines: this.countingLines }),
       });
       this.pipeline = candidatePipeline;
       const initialization = await candidatePipeline.initialize();
@@ -113,6 +137,10 @@ export class NanoDetPilotPipeline implements NodePilotPipeline {
         throw new Error('NanoDet pilot pipeline was disposed during initialization');
       }
 
+      // A geometry update can arrive while the external model is loading. Reapply
+      // the latest value after initialization so the runtime cannot start with a
+      // stale constructor snapshot.
+      candidatePipeline.setCountingLines(this.countingLines);
       this.initialization = initialization;
       this.state = {
         state: 'ready',

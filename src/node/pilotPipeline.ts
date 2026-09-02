@@ -1,4 +1,5 @@
 import type { DetectorBackend } from '../detection/types';
+import type { NormalizedDirectedLine } from '../geometry/normalized';
 import type { EdgeMobilityPipelineFrame } from '../pipeline/edgeMobilityPipeline';
 import type { InferenceFrameProcessor } from './inferenceLoop';
 
@@ -15,6 +16,10 @@ export interface NodePilotPipelineSnapshot {
 
 export interface NodePilotPipeline extends InferenceFrameProcessor<EdgeMobilityPipelineFrame> {
   snapshot(): NodePilotPipelineSnapshot;
+  /** Replaces local counting geometry; an empty list explicitly disables counting. */
+  setCountingLines(lines: readonly NormalizedDirectedLine[]): void;
+  /** Starts a clean trajectory/event epoch without reloading the detector model. */
+  resetTrackingAndEvents(): void;
 }
 
 export type NodePilotPipelineFactory = (
