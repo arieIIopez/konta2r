@@ -77,6 +77,8 @@ export class NodePanel {
   private communityFlowRuntime: CommunityFlowRuntime | null = null;
   private root: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
+  private communityUnsubscribe: (() => void) | null = null;
+  private communityDeliveryIdentityKey: string | null = null;
   private pilotLoopState: InferenceLoopState = 'idle';
   private pilotFrameStats: PilotFrameStats | null = null;
   private pilotError: string | undefined;
@@ -196,6 +198,17 @@ export class NodePanel {
     const communityMount = root.querySelector<HTMLElement>('[data-community-mount]');
     if (!communityMount) throw new Error('Missing Community node surface');
     this.communityPanel.mount(communityMount);
+    this.communityUnsubscribe?.();
+    this.communityUnsubscribe = this.community.subscribe((snapshot) => {
+      this.renderCommunityFlowStatus();
+      const identityKey = snapshot.sensorReady
+        && snapshot.identity?.status === 'active'
+        ? `${snapshot.identity.nodeId}:${snapshot.identity.credentialVersion}`
+        : null;
+      if (identityKey === this.communityDeliveryIdentityKey) return;
+      this.communityDeliveryIdentityKey = identityKey;
+      if (identityKey) void this.retryCommunityFlow();
+    });
 
     root.querySelector<HTMLButtonElement>('[data-start]')?.addEventListener('click', () => void this.startNode());
     root.querySelector<HTMLButtonElement>('[data-stop]')?.addEventListener('click', () => void this.runtime.stop());
@@ -242,15 +255,7 @@ export class NodePanel {
     this.communityFlowError = undefined;
     if (this.communityFlowRuntime) {
       window.addEventListener('online', this.onlineHandler);
-      const streamId = this.countingGeometry
-        ? countingGeometryStreamId(this.countingGeometry)
-        : undefined;
-      void this.communityFlowRuntime.setActiveStream(streamId)
-        .then(() => this.renderCommunityFlowStatus())
-        .catch((error: unknown) => {
-          this.communityFlowError = error instanceof Error ? error.message : String(error);
-          this.renderCommunityFlowStatus();
-        });
+      void this.initializeCommunityFlowRuntime();
     }
     this.renderCommunityFlowStatus();
   }
@@ -288,6 +293,9 @@ export class NodePanel {
 
   destroy(): void {
     this.unsubscribe?.();
+    this.communityUnsubscribe?.();
+    this.communityUnsubscribe = null;
+    this.communityDeliveryIdentityKey = null;
     window.removeEventListener('online', this.onlineHandler);
     this.communityFlowRuntime?.destroy();
     this.communityFlowRuntime = null;
@@ -303,6 +311,22 @@ export class NodePanel {
   private readonly onlineHandler = (): void => {
     void this.retryCommunityFlow();
   };
+
+  private async initializeCommunityFlowRuntime(): Promise<void> {
+    const runtime = this.communityFlowRuntime;
+    if (!runtime) return;
+    try {
+      const streamId = this.countingGeometry
+        ? countingGeometryStreamId(this.countingGeometry)
+        : undefined;
+      await runtime.setActiveStream(streamId);
+      await runtime.connectivityRestored();
+      this.communityFlowError = undefined;
+    } catch (error) {
+      this.communityFlowError = error instanceof Error ? error.message : String(error);
+    }
+    this.renderCommunityFlowStatus();
+  }
 
   private async startNode(): Promise<void> {
     this.localCrossings = emptyCrossingCounts();
