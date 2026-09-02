@@ -1,16 +1,16 @@
 import type { NodeCommunityRuntime } from '../community/nodeCommunityController';
-import { NanoDetPilotPipeline } from '../detection/nanodetPilotPipeline';
 import type { EdgeMobilityPipelineFrame } from '../pipeline/edgeMobilityPipeline';
 import type { PwaRuntimeState } from '../pwa/register';
 import { NODE_PROFILE_SETTINGS, type NodePerformanceProfile } from './deviceProfile';
 import type { InferenceLoopState } from './inferenceLoop';
 import { NodeCommunityPanel } from './nodeCommunityPanel';
+import type { NodePilotPipeline, NodePilotPipelineFactory } from './pilotPipeline';
 import { NodeRuntimeController, type NodeRuntimeSnapshot } from './runtimeController';
 import { RuntimeInferenceBridge } from './runtimeInferenceBridge';
 
 export interface NodePanelOptions {
-  /** Explicit field-pilot opt-in. It is never enabled by default. */
-  experimentalDetector?: 'nanodet';
+  /** Optional pilot factory supplied by a dynamically imported experimental chunk. */
+  pilotPipelineFactory?: NodePilotPipelineFactory;
 }
 
 interface PilotFrameStats {
@@ -41,7 +41,7 @@ export class NodePanel {
   private readonly pwa: PwaRuntimeState;
   private readonly community: NodeCommunityRuntime;
   private readonly communityPanel: NodeCommunityPanel;
-  private readonly pilotPipeline: NanoDetPilotPipeline | null;
+  private readonly pilotPipeline: NodePilotPipeline | null;
   private readonly inferenceBridge: RuntimeInferenceBridge<EdgeMobilityPipelineFrame> | null;
   private root: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
@@ -57,33 +57,30 @@ export class NodePanel {
     this.pwa = pwa;
     this.community = community;
     this.communityPanel = new NodeCommunityPanel(community);
-    if (options.experimentalDetector === 'nanodet') {
-      this.pilotPipeline = new NanoDetPilotPipeline({
-        maxDetections: () => NODE_PROFILE_SETTINGS[this.runtime.snapshot().profile].maxDetections,
-      });
-      this.inferenceBridge = new RuntimeInferenceBridge(this.runtime, this.pilotPipeline, {
-        onFrame: (frame) => {
-          this.pilotFrameStats = {
-            detections: frame.detector.detections.length,
-            fusedEntities: frame.fusion.entities.length,
-            confirmedTracks: frame.tracking.confirmedTracks.length,
-          };
-          this.renderPilot();
-        },
-        onStateChange: (state) => {
-          this.pilotLoopState = state;
-          if (state !== 'error') this.pilotError = undefined;
-          this.renderPilot();
-        },
-        onError: (error) => {
-          this.pilotError = error.message;
-          this.renderPilot();
-        },
-      });
-    } else {
-      this.pilotPipeline = null;
-      this.inferenceBridge = null;
-    }
+    this.pilotPipeline = options.pilotPipelineFactory?.(
+      () => NODE_PROFILE_SETTINGS[this.runtime.snapshot().profile].maxDetections,
+    ) ?? null;
+    this.inferenceBridge = this.pilotPipeline
+      ? new RuntimeInferenceBridge(this.runtime, this.pilotPipeline, {
+          onFrame: (frame) => {
+            this.pilotFrameStats = {
+              detections: frame.detector.detections.length,
+              fusedEntities: frame.fusion.entities.length,
+              confirmedTracks: frame.tracking.confirmedTracks.length,
+            };
+            this.renderPilot();
+          },
+          onStateChange: (state) => {
+            this.pilotLoopState = state;
+            if (state !== 'error') this.pilotError = undefined;
+            this.renderPilot();
+          },
+          onError: (error) => {
+            this.pilotError = error.message;
+            this.renderPilot();
+          },
+        })
+      : null;
   }
 
   mount(root: HTMLElement): void {
@@ -256,19 +253,19 @@ export class NodePanel {
 
     const pilot = this.pilotPipeline.snapshot();
     if (pilot.state === 'idle') {
-      setText(root, '[data-detector]', 'NanoDet piloto');
+      setText(root, '[data-detector]', pilot.displayName);
       setText(root, '[data-detector-detail]', 'externo · SHA verificado al iniciar · no seleccionado para producción');
     } else if (pilot.state === 'loading') {
-      setText(root, '[data-detector]', 'cargando piloto…');
+      setText(root, '[data-detector]', `cargando ${pilot.displayName}…`);
       setText(root, '[data-detector-detail]', 'descarga/cache local + verificación SHA-256');
     } else if (pilot.state === 'ready') {
-      setText(root, '[data-detector]', `NanoDet · ${pilot.backend ?? '—'}`);
+      setText(root, '[data-detector]', `${pilot.displayName} · ${pilot.backend ?? '—'}`);
       setText(root, '[data-detector-detail]', `${pilot.artifactSource === 'cache' ? 'cache verificado' : 'descarga verificada'}${pilot.cachePersisted ? ' · persistido' : ''} · ${pilot.modelSha256?.slice(0, 12) ?? '—'}…`);
     } else if (pilot.state === 'error') {
       setText(root, '[data-detector]', 'error de piloto');
       setText(root, '[data-detector-detail]', pilot.error ?? 'fallo de inicialización');
     } else {
-      setText(root, '[data-detector]', pilot.state);
+      setText(root, '[data-detector]', `${pilot.displayName} · ${pilot.state}`);
       setText(root, '[data-detector-detail]', 'runtime piloto');
     }
 
