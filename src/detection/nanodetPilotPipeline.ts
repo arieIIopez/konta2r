@@ -1,22 +1,14 @@
-import type { DetectorInitialization, DetectorInput } from './types';
 import type { EdgeMobilityPipelineFrame } from '../pipeline/edgeMobilityPipeline';
 import { EdgeMobilityPipeline } from '../pipeline/edgeMobilityPipeline';
+import type { NodePilotPipeline, NodePilotPipelineSnapshot } from '../node/pilotPipeline';
+import type { DetectorInitialization, DetectorInput } from './types';
 import {
   loadNanoDetPilot,
-  type NanoDetPilotArtifactSource,
   type NanoDetPilotLoadResult,
   type NanoDetPilotLoaderOptions,
 } from './onnx/nanodetPilot';
 
-export interface NanoDetPilotPipelineSnapshot {
-  state: 'idle' | 'loading' | 'ready' | 'error' | 'disposed';
-  candidateId?: string;
-  modelSha256?: string;
-  artifactSource?: NanoDetPilotArtifactSource;
-  cachePersisted?: boolean;
-  backend?: DetectorInitialization['runtime']['backend'];
-  error?: string;
-}
+const PILOT_NAME = 'NanoDet piloto';
 
 export type NanoDetPilotLoader = (
   options: NanoDetPilotLoaderOptions,
@@ -42,13 +34,16 @@ function normalizeError(error: unknown): string {
  * initialize. No counting line is injected here: this stage measures detector,
  * fusion and tracking behavior without inventing a camera geometry.
  */
-export class NanoDetPilotPipeline {
+export class NanoDetPilotPipeline implements NodePilotPipeline {
   private readonly options: NanoDetPilotPipelineOptions;
   private readonly loader: NanoDetPilotLoader;
   private pipeline: EdgeMobilityPipeline | null = null;
   private initialization: DetectorInitialization | null = null;
   private initializationPromise: Promise<DetectorInitialization> | null = null;
-  private state: NanoDetPilotPipelineSnapshot = { state: 'idle' };
+  private state: NodePilotPipelineSnapshot = {
+    state: 'idle',
+    displayName: PILOT_NAME,
+  };
   private disposed = false;
 
   constructor(options: NanoDetPilotPipelineOptions = {}) {
@@ -56,7 +51,7 @@ export class NanoDetPilotPipeline {
     this.loader = options.loader ?? loadNanoDetPilot;
   }
 
-  snapshot(): NanoDetPilotPipelineSnapshot {
+  snapshot(): NodePilotPipelineSnapshot {
     return { ...this.state };
   }
 
@@ -69,7 +64,7 @@ export class NanoDetPilotPipeline {
     if (this.initialization) return Promise.resolve(this.initialization);
     if (this.initializationPromise) return this.initializationPromise;
 
-    this.state = { state: 'loading' };
+    this.state = { state: 'loading', displayName: PILOT_NAME };
     this.initializationPromise = this.initializeOnce();
     return this.initializationPromise;
   }
@@ -95,7 +90,7 @@ export class NanoDetPilotPipeline {
     this.pipeline = null;
     this.initialization = null;
     this.initializationPromise = null;
-    this.state = { state: 'disposed' };
+    this.state = { state: 'disposed', displayName: PILOT_NAME };
   }
 
   private async initializeOnce(): Promise<DetectorInitialization> {
@@ -113,6 +108,7 @@ export class NanoDetPilotPipeline {
       this.initialization = initialization;
       this.state = {
         state: 'ready',
+        displayName: PILOT_NAME,
         candidateId: loaded.candidateId,
         modelSha256: loaded.modelSha256,
         artifactSource: loaded.artifactSource,
@@ -124,7 +120,11 @@ export class NanoDetPilotPipeline {
       this.pipeline = null;
       this.initialization = null;
       this.initializationPromise = null;
-      this.state = { state: 'error', error: normalizeError(error) };
+      this.state = {
+        state: 'error',
+        displayName: PILOT_NAME,
+        error: normalizeError(error),
+      };
       throw error;
     }
   }
