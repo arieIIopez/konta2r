@@ -18,6 +18,8 @@ export interface NodePilotPipeline extends InferenceFrameProcessor<EdgeMobilityP
   snapshot(): NodePilotPipelineSnapshot;
   /** Replaces local counting geometry; an empty list explicitly disables counting. */
   setCountingLines(lines: readonly NormalizedDirectedLine[]): void;
+  /** Starts a clean trajectory/event epoch without reloading the detector model. */
+  resetTrackingAndEvents(): void;
 }
 
 export type NodePilotPipelineFactory = (
