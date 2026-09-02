@@ -68,7 +68,6 @@ export class CountingGeometryEditor {
   private readonly lineId: string;
   private readonly listeners = new Set<Listener>();
   private video: HTMLVideoElement | null = null;
-  private host: HTMLElement | null = null;
   private overlay: SVGSVGElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private activePointerId: number | null = null;
@@ -101,7 +100,6 @@ export class CountingGeometryEditor {
 
   mount(host: HTMLElement, video: HTMLVideoElement): void {
     this.destroyOverlay();
-    this.host = host;
     this.video = video;
     const overlay = svgElement('svg');
     overlay.classList.add('counting-geometry-overlay');
@@ -226,7 +224,6 @@ export class CountingGeometryEditor {
   destroy(): void {
     this.destroyOverlay();
     this.listeners.clear();
-    this.host = null;
     this.video = null;
   }
 
@@ -302,7 +299,7 @@ export class CountingGeometryEditor {
   private eventPoint(event: PointerEvent): NormalizedPoint2D | undefined {
     const overlay = this.overlay;
     const video = this.video;
-    if (!overlay || !video || video.videoWidth <= 0 || video.videoHeight <= 0) return undefined;
+    if (!overlay || !this.isLiveVideo(video)) return undefined;
     const rect = overlay.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return undefined;
     return viewportPointToNormalizedVideo({
@@ -317,10 +314,20 @@ export class CountingGeometryEditor {
 
   private requireUsableVideo(): HTMLVideoElement {
     const video = this.video;
-    if (!video || video.videoWidth <= 0 || video.videoHeight <= 0) {
+    if (!this.isLiveVideo(video)) {
       throw new Error('La cámara debe estar activa antes de guardar la geometría');
     }
     return video;
+  }
+
+  private isLiveVideo(video: HTMLVideoElement | null): video is HTMLVideoElement {
+    return Boolean(
+      video
+      && video.srcObject
+      && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+      && video.videoWidth > 0
+      && video.videoHeight > 0
+    );
   }
 
   private render(): void {
