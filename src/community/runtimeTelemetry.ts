@@ -41,7 +41,7 @@ export function communityRuntimeSummary(
 ): CommunityNodeRuntimeSummary {
   return {
     uptimeRatio: clamp01(snapshot.continuity.uptimeRatio),
-    inferenceFpsP50: Math.max(0, snapshot.health.observedFps),
+    inferenceFpsP50: Math.max(0, snapshot.health.inferenceFpsP50),
     inferenceLatencyP95Ms: Math.max(0, snapshot.health.processingLatencyP95Ms),
     droppedFrameRatio: clamp01(snapshot.health.droppedFrameRatio),
     runtimeBackend: detector.runtime.backend,
