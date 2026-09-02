@@ -2,19 +2,35 @@
 
 ## Status
 
-This runbook prepares the first **dedicated Konta2r Supabase project**. It must not be applied to an unrelated Supabase project.
+Konta2r now has a **dedicated Supabase project** in the `arieIIopez` organization:
 
-The repository is deploy-ready at the code level, but a live deployment still requires three external actions that must not be faked in CI or committed to Git:
+- project: `konta2r`;
+- project ref: `skfraobbnbjpefqtnuqk`;
+- region: `sa-east-1` (São Paulo);
+- organization plan: `free`;
+- Supabase development branches: none.
 
-1. create/select the dedicated Supabase project;
-2. configure the custom node-credential pepper as an Edge Function secret;
-3. configure Google OAuth for human administration.
+The unrelated pre-existing Supabase project must never be used for Konta2r.
+
+At the current deployment stage the initial schema is live, Security Advisor is clean, and the human enrollment/lifecycle Edge Functions have been deployed. Google OAuth and the final positive lifecycle E2E remain external gates.
 
 The Community sensor path does **not** use a human session. Google/Supabase Auth is only for enrollment and lifecycle administration.
 
+## Cost guardrail
+
+The pilot is intentionally designed to remain inside the Supabase Free plan:
+
+- do not create Supabase development branches unless their current cost is explicitly reviewed and approved;
+- do not enable paid add-ons, read replicas, PITR, custom domains, or other paid infrastructure without explicit approval;
+- keep raw video, frames and tracks on-device, which also avoids backend storage/egress growth;
+- Community uploads contain only coarse aggregates;
+- check the current Supabase plan/usage limits before any scale-out change.
+
+A Free-plan configuration cannot guarantee that a third-party vendor will never change prices or limits in the future. Any future infrastructure change that could create cost must therefore be treated as a separate approval gate.
+
 ## Region
 
-For the Santiago/Chile pilot, use `sa-east-1` unless there is an organizational requirement to host elsewhere. The deployment region is infrastructure metadata only; it does not change the privacy boundary: raw frames, tracks and exact household coordinates remain local.
+For the Santiago/Chile pilot use `sa-east-1`. The deployment region is infrastructure metadata only; it does not change the privacy boundary: raw frames, tracks and exact household coordinates remain local.
 
 ## Current auth/key model
 
@@ -31,15 +47,9 @@ Never place any of the following in a `VITE_*` variable:
 - node credential peppers;
 - Google OAuth client secret.
 
-Hosted Edge Functions receive the platform variables automatically, including:
+Hosted Edge Functions receive the platform variables automatically, including `SUPABASE_URL`, `SUPABASE_DB_URL`, `SUPABASE_PUBLISHABLE_KEYS`, `SUPABASE_SECRET_KEYS` and `SUPABASE_JWKS`.
 
-- `SUPABASE_URL`;
-- `SUPABASE_DB_URL`;
-- `SUPABASE_PUBLISHABLE_KEYS`;
-- `SUPABASE_SECRET_KEYS`;
-- `SUPABASE_JWKS`.
-
-`SUPABASE_PUBLISHABLE_KEYS` is a JSON dictionary whose `default` value is the actual publishable key. `supabaseAuth.ts` intentionally reads that value directly, with local `SUPABASE_PUBLISHABLE_KEY` and legacy `SUPABASE_ANON_KEY` compatibility fallbacks.
+`SUPABASE_PUBLISHABLE_KEYS` is a JSON dictionary whose `default` value is the actual publishable key. `supabaseAuth.ts` reads that value directly, with local `SUPABASE_PUBLISHABLE_KEY` and legacy `SUPABASE_ANON_KEY` compatibility fallbacks.
 
 ## Edge Function authorization
 
@@ -53,46 +63,50 @@ Hosted Edge Functions receive the platform variables automatically, including:
 
 `ingest-community` must remain `verify_jwt=false`: its credential is intentionally not a Supabase user JWT. This does **not** make the endpoint unauthenticated; Konta2r authenticates the sensor inside the handler.
 
-## Custom function secrets
+## Node credential pepper: Supabase Vault
 
-Start from `supabase/functions/.env.example`.
+Node credentials are HMAC-SHA256 fingerprints. Their server pepper is **not an environment variable and is never committed**.
 
-The minimum custom keyring is:
+`supabase/vault.sql` bootstraps the keyring:
 
-```text
-KONTA2R_NODE_TOKEN_ACTIVE_KEY_VERSION=1
-KONTA2R_NODE_TOKEN_PEPPER_V1=<random secret>
-```
+1. ensure Supabase Vault is available;
+2. revoke browser-role access to Vault secret/decrypted-secret objects;
+3. generate 48 random bytes inside Postgres with `extensions.gen_random_bytes(48)`;
+4. pass the generated value directly to `vault.create_secret(...)` under the name `konta2r_node_token_pepper_v1`;
+5. store only Vault's encrypted representation on disk/backups.
 
-Generate the pepper locally on a trusted machine, for example with a cryptographic random generator. Do not paste the value into chat, issues, commits or browser environment variables.
+The Edge Functions query `vault.decrypted_secrets` using their direct privileged Postgres connection. The plaintext pepper therefore never appears in Git, frontend variables, migrations, chat, or application logs.
+
+`KONTA2R_NODE_TOKEN_ACTIVE_KEY_VERSION` defaults to `1`. It is only needed as an Edge Function environment override during a future rotation.
 
 Rotation is versioned:
 
-1. add a new `KONTA2R_NODE_TOKEN_PEPPER_VN` while the previous pepper remains present;
-2. change `KONTA2R_NODE_TOKEN_ACTIVE_KEY_VERSION` to `N`;
+1. create `konta2r_node_token_pepper_vN` in Vault with fresh database-generated randomness while the previous version remains present;
+2. set `KONTA2R_NODE_TOKEN_ACTIVE_KEY_VERSION=N` for the Edge Functions;
 3. rotate node credentials through the authenticated lifecycle endpoint;
-4. remove an old pepper only after the database contains no live credential using that key version.
+4. remove an old Vault secret only after no live credential uses that key version.
 
 ## Database bootstrap
 
-`supabase/schema.sql` is the reviewed initial schema source, not a fabricated migration file.
+`supabase/schema.sql` is the reviewed initial schema source. `supabase/vault.sql` is the reviewed server-secret bootstrap source.
 
 Deployment sequence:
 
-1. apply the schema to the new empty project using the Supabase database tool/CLI workflow;
-2. verify `public.profiles`, `public.segments`, `public.nodes` and the private credential/audit/aggregate tables;
-3. verify RLS/grants;
-4. run Supabase Security Advisor and Performance Advisor;
-5. fix findings before treating the deployment as valid;
-6. only after validation, create/record the canonical migration history using the current Supabase CLI workflow.
+1. apply the initial schema to the dedicated empty project;
+2. apply `supabase/vault.sql`;
+3. verify `public.profiles`, `public.segments`, `public.nodes` and private credential/audit/aggregate tables;
+4. verify RLS/grants;
+5. run Supabase Security Advisor and Performance Advisor;
+6. fix security findings before treating the deployment as valid.
 
-Do not invent migration timestamps by hand.
+Do not invent migration timestamps by hand. When local Supabase CLI migration history is introduced, create migration files with the current CLI workflow rather than fabricating filenames.
 
 ## Required privacy properties after bootstrap
 
 The database must preserve all of these properties:
 
 - `private` is not exposed to `anon` or `authenticated`;
+- Vault decrypted secrets are not exposed to `anon` or `authenticated`;
 - raw node credentials are never stored, only HMAC-SHA256 fingerprints;
 - lifecycle audit events are append-only application evidence;
 - Community batches are idempotent by `(node_id, sequence)`;
@@ -109,14 +123,14 @@ Deploy all relative dependencies together with each entrypoint:
 - `node-lifecycle`;
 - `ingest-community`;
 - `supabase/functions/_shared/*`;
-- the referenced `src/backend/*`, `src/community/*`, `src/core/*` dependencies required by each function;
+- referenced `src/backend/*`, `src/community/*`, `src/core/*` dependencies;
 - `supabase/functions/deno.json`.
 
-After deployment, inspect the deployed function list and function versions. Do not infer success merely from an API response.
+After deployment inspect the deployed function list and versions. Do not infer success merely from an API response.
 
 ## Non-destructive HTTP smoke test
 
-After project URL, publishable key, schema and functions exist, run:
+After project URL, publishable key, schema, Vault and functions exist, run:
 
 ```bash
 KONTA2R_E2E_SUPABASE_URL='https://<ref>.supabase.co' \
@@ -128,7 +142,7 @@ The probe does not create rows. It verifies:
 
 1. `node-enroll` rejects a caller without a human JWT;
 2. `node-lifecycle` rejects a caller without a human JWT;
-3. `ingest-community` accepts the request far enough to execute Konta2r policy, then rejects the missing `Konta2rNode` credential with `invalid_node_auth`.
+3. `ingest-community` reaches Konta2r policy and rejects a missing `Konta2rNode` credential.
 
 A failure here blocks the full E2E test.
 
@@ -209,13 +223,13 @@ A standard build without these variables remains local-only. A build with them e
 
 Konta2r may call the backend integration **deployed and E2E-verified** only when all of the following are true:
 
-- dedicated project exists;
-- schema is live and advisors reviewed;
-- custom pepper secret is configured;
+- dedicated Free-plan project exists;
+- schema and Vault keyring are live and advisors reviewed;
 - all three Edge Functions are deployed with intended JWT policy;
 - smoke probe passes;
 - Google human login works;
 - full lifecycle E2E passes;
 - SQL evidence confirms idempotency, rotation, pause and revocation semantics;
 - frontend uses only project URL + publishable key;
-- no unrelated Supabase project was modified.
+- no unrelated Supabase project was modified;
+- no paid Supabase feature was enabled without explicit approval.
