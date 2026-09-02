@@ -9,8 +9,10 @@ import {
   communityRuntimeSummary,
 } from './runtimeTelemetry';
 
+type FlowBucketCollectorPort = Pick<CommunityFlowBucketCollector, 'observe' | 'closed' | 'commit'>;
+
 export interface CommunityFlowBucketPublisherOptions {
-  collector: CommunityFlowBucketCollector;
+  collector: FlowBucketCollectorPort;
   delivery: CommunityDeliveryRuntime;
   runtimeSnapshot: () => NodeRuntimeSnapshot;
   detectorInitialization: () => DetectorInitialization | null;
@@ -58,7 +60,7 @@ function publicationKey(bucket: ClosedCommunityFlowBucket): string {
  * race bucket publication against another observation.
  */
 export class CommunityFlowBucketPublisher {
-  private readonly collector: CommunityFlowBucketCollector;
+  private readonly collector: FlowBucketCollectorPort;
   private readonly delivery: CommunityDeliveryRuntime;
   private readonly runtimeSnapshot: () => NodeRuntimeSnapshot;
   private readonly detectorInitialization: () => DetectorInitialization | null;
