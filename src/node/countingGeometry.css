@@ -1,0 +1,123 @@
+.counting-geometry-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  touch-action: none;
+  user-select: none;
+}
+
+.counting-geometry-overlay.editing {
+  cursor: crosshair;
+  background: rgba(15, 23, 42, .08);
+}
+
+.counting-line {
+  stroke: #5eead4;
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 3px rgba(2, 6, 23, .95));
+}
+
+.counting-line-arrow { fill: #5eead4; }
+
+.counting-line-handle {
+  fill: #0f172a;
+  stroke: #ccfbf1;
+  stroke-width: 3;
+}
+
+.counting-line-fin { fill: #115e59; }
+
+.counting-side-label circle {
+  fill: rgba(2, 6, 23, .86);
+  stroke-width: 2;
+}
+
+.counting-side-label text {
+  fill: #f8fafc;
+  font: 800 12px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.counting-side-label.side-a circle { stroke: #93c5fd; }
+.counting-side-label.side-b circle { stroke: #fde68a; }
+
+.counting-geometry-panel {
+  margin: 0 12px 12px;
+  border: 1px solid rgba(94, 234, 212, .16);
+  border-radius: 16px;
+  background: rgba(2, 6, 23, .34);
+  overflow: hidden;
+}
+
+.counting-geometry-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 13px 8px;
+}
+
+.counting-geometry-head > div { min-width: 0; }
+.counting-geometry-head span:first-child {
+  display: block;
+  color: #5eead4;
+  font-size: .64rem;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.counting-geometry-head strong {
+  display: block;
+  margin-top: 3px;
+  font-size: .88rem;
+  overflow-wrap: anywhere;
+}
+.counting-geometry-head small {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: .68rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.counting-geometry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 13px 10px;
+}
+.counting-geometry-actions .action { min-height: 40px; }
+.counting-geometry-actions .action:disabled { opacity: .42; cursor: not-allowed; }
+.counting-geometry-actions .danger {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, .24);
+  background: rgba(127, 29, 29, .16);
+}
+
+.counting-geometry-help,
+.counting-geometry-error {
+  margin: 0 13px 12px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  font-size: .68rem;
+  line-height: 1.45;
+}
+.counting-geometry-help {
+  color: #cbd5e1;
+  background: rgba(15, 118, 110, .08);
+  border: 1px solid rgba(45, 212, 191, .12);
+}
+.counting-geometry-error {
+  color: #fecaca;
+  background: rgba(127, 29, 29, .18);
+  border: 1px solid rgba(248, 113, 113, .2);
+}
+
+@media (max-width: 680px) {
+  .counting-geometry-head { align-items: stretch; }
+  .counting-geometry-head [data-geometry-status] { flex: 0 0 auto; }
+  .counting-geometry-actions .action { flex: 1 1 calc(50% - 8px); }
+}
