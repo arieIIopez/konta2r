@@ -106,6 +106,12 @@ export function createBrowserCommunityFlowPublisher(
   return new CommunityFlowBucketPublisher({
     collector,
     delivery,
+    activeNodeId: () => {
+      const snapshot = options.community.snapshot();
+      return snapshot.sensorReady && snapshot.identity?.status === 'active'
+        ? snapshot.identity.nodeId
+        : undefined;
+    },
     runtimeSnapshot: () => options.runtime.snapshot(),
     detectorInitialization: () => options.pipeline.getInitialization(),
     softwareVersion: options.softwareVersion,
