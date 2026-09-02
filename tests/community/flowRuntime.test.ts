@@ -40,7 +40,7 @@ class FakePublisher implements CommunityFlowPublisherPort {
 }
 
 function harness(initialNode: string | undefined = NODE_A) {
-  let nodeId = initialNode;
+  let nodeId: string | undefined = initialNode;
   const pendingByNode = new Map<string, string[]>();
   const created = new Map<string, FakePublisher[]>();
   const runtime = new BrowserCommunityFlowRuntime({
