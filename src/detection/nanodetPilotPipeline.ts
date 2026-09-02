@@ -76,6 +76,11 @@ export class NanoDetPilotPipeline implements NodePilotPipeline {
     this.pipeline?.setCountingLines(this.countingLines);
   }
 
+  resetTrackingAndEvents(): void {
+    if (this.disposed) return;
+    this.pipeline?.resetTrackingAndEvents();
+  }
+
   initialize(): Promise<DetectorInitialization> {
     if (this.disposed) return Promise.reject(new Error('NanoDet pilot pipeline is disposed'));
     if (this.initialization) return Promise.resolve(this.initialization);
