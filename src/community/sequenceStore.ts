@@ -4,6 +4,7 @@ import { isValidNodeId } from '../backend/nodeCredential';
 export interface CommunitySequenceStore {
   next(nodeId: string): Promise<number>;
   reserve(nodeId: string, publicationKey: string): Promise<number>;
+  release(nodeId: string, publicationKey: string): Promise<void>;
   peek(nodeId: string): Promise<number | undefined>;
 }
 
@@ -43,6 +44,10 @@ function validatePublicationKey(publicationKey: string): string {
   return key;
 }
 
+function reservationId(nodeId: string, publicationKey: string): string {
+  return `${nodeId}|${validatePublicationKey(publicationKey)}`;
+}
+
 function validateSequence(sequence: number): void {
   if (!Number.isSafeInteger(sequence) || sequence < 0) {
     throw new Error('Invalid persisted Community sequence');
@@ -53,6 +58,7 @@ function validateSequence(sequence: number): void {
  * Allocates monotonically increasing per-node batch sequences. `reserve()` adds
  * a local publication idempotency key: retrying the same closed bucket after a
  * crash reuses its original sequence rather than creating a duplicate upload.
+ * The reservation is released only after the reduced source bucket is deleted.
  */
 export class IndexedDbCommunitySequenceStore implements CommunitySequenceStore {
   private readonly dbPromise: Promise<IDBPDatabase<Konta2rCommunitySequenceSchema>>;
@@ -81,11 +87,11 @@ export class IndexedDbCommunitySequenceStore implements CommunitySequenceStore {
   async reserve(nodeId: string, publicationKey: string): Promise<number> {
     validateNodeId(nodeId);
     const key = validatePublicationKey(publicationKey);
-    const reservationId = `${nodeId}|${key}`;
+    const id = reservationId(nodeId, key);
     const db = await this.dbPromise;
     const tx = db.transaction(['sequence', 'reservations'], 'readwrite');
     const reservations = tx.objectStore('reservations');
-    const existing = await reservations.get(reservationId);
+    const existing = await reservations.get(id);
     if (existing) {
       validateSequence(existing.sequence);
       await tx.done;
@@ -98,13 +104,19 @@ export class IndexedDbCommunitySequenceStore implements CommunitySequenceStore {
     validateSequence(sequence);
     await sequences.put({ nodeId, nextSequence: sequence + 1 }, nodeId);
     await reservations.put({
-      id: reservationId,
+      id,
       nodeId,
       publicationKey: key,
       sequence,
-    }, reservationId);
+    }, id);
     await tx.done;
     return sequence;
+  }
+
+  async release(nodeId: string, publicationKey: string): Promise<void> {
+    validateNodeId(nodeId);
+    const db = await this.dbPromise;
+    await db.delete('reservations', reservationId(nodeId, publicationKey));
   }
 
   async peek(nodeId: string): Promise<number | undefined> {
