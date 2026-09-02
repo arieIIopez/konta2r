@@ -32,6 +32,13 @@ class MemoryBucketStore implements CommunityFlowBucketStore {
     });
   }
 
+  async listStreams(nodeId: string): Promise<string[]> {
+    return [...new Set([...this.cells.values()]
+      .filter((cell) => cell.nodeId === nodeId)
+      .map((cell) => cell.streamId))]
+      .sort();
+  }
+
   async listClosedBucketStarts(nodeId: string, streamId: string, nowMs: number): Promise<number[]> {
     return [...new Set([...this.cells.values()]
       .filter((cell) => (
@@ -104,6 +111,7 @@ describe('CommunityFlowBucketCollector', () => {
     expect(cell?.nodeId).toBe(NODE_A);
     expect(cell?.count).toBe(3);
     expect(cell?.qualitySum).toBeCloseTo(2.7);
+    expect(await store.listStreams(NODE_A)).toEqual(['line_main']);
     const keys = Object.keys(cell ?? {});
     expect(keys).not.toContain('trackId');
     expect(keys).not.toContain('eventId');
@@ -160,6 +168,7 @@ describe('CommunityFlowBucketCollector', () => {
     await collector.observe(NODE_A, [crossing('1')], observedAt);
 
     expect(await collector.closed(NODE_B, observedAt + 70_000)).toEqual([]);
+    expect(await store.listStreams(NODE_B)).toEqual([]);
     const original = await collector.closed(NODE_A, observedAt + 70_000);
     expect(original).toHaveLength(1);
     expect(original[0]?.nodeId).toBe(NODE_A);
