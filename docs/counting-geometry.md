@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Konta2r must not publish flow counts until the operator has defined a real counting geometry for the camera view.
+Konta2r must not produce Community flow aggregates until the operator has defined a real counting geometry for the camera view.
 
-The first field geometry is one finite, oriented line. It is stored in normalized source-frame coordinates and is now connected to the local semantic counting runtime.
+The first field geometry is one finite, oriented line. It is stored in normalized source-frame coordinates, drives the local semantic counting runtime and now also defines the revision-scoped stream used by the privacy-preserving Community bucket layer.
 
-Saving a line **does not** enable Community publication. The current runtime milestone ends at local `LineCrossingEvent`s and local A→B / B→A counters. Community aggregation remains a separate privacy boundary.
+This is a code-level integration. It does **not** mean that a live Konta2r Supabase backend has been deployed.
 
 ## Touch editor
 
@@ -21,7 +21,7 @@ Workflow:
 5. save;
 6. edit again to create a new revision, or clear the geometry.
 
-A line shorter than 4% of the normalized frame diagonal coordinate scale is rejected as too short for reliable touch editing.
+A line shorter than 4% of the normalized frame coordinate scale is rejected as too short for reliable touch editing.
 
 While the operator is editing, the saved line is removed from the operational counting pipeline. This prevents the runtime from silently counting with an old geometry hidden behind a moving draft.
 
@@ -48,12 +48,12 @@ The line itself is oriented from endpoint `a` to endpoint `b`; the arrow in the 
 
 The two **crossing sides** are separate from the line endpoints:
 
-- side `A` = positive signed side of the oriented line (`LEFT` in the current geometry engine convention);
+- side `A` = positive signed side of the oriented line (`LEFT` in the geometry engine convention);
 - side `B` = negative signed side (`RIGHT`);
 - crossing `A → B` = `LEFT_TO_RIGHT`;
 - crossing `B → A` = `RIGHT_TO_LEFT`.
 
-The public Community protocol already maps these to `A_TO_B` / `B_TO_A`.
+The Community collector maps those directions to `A_TO_B` / `B_TO_A`.
 
 The labels describe transversal movement across the line, not travel along the arrow.
 
@@ -72,9 +72,27 @@ Editing an existing geometry preserves `configurationId` and increments `revisio
 
 The reference frame does not convert normalized geometry back into pixels. It is retained as audit evidence of the camera framing under which that revision was defined.
 
+### Revision-scoped operational stream
+
+The persisted editor line keeps the stable id `line_primary`, but the operational clone receives:
+
+```text
+<configurationId>_r<revision>
+```
+
+For example:
+
+```text
+geometry_abcd1234_r3
+```
+
+That id becomes both the local crossing `geometryId` and the Community bucket `streamId` for that revision.
+
+This prevents counts produced under two different physical line placements from being combined in the same local privacy cell before low-count suppression or idempotent publication.
+
 ## Runtime activation boundary
 
-The saved geometry is now connected to `NanoDetPilotPipeline` and `EdgeMobilityPipeline`.
+The saved geometry is connected to `NanoDetPilotPipeline` and `EdgeMobilityPipeline`.
 
 `EdgeMobilityPipeline.setCountingLines()` is the only runtime replacement boundary. It:
 
@@ -97,60 +115,79 @@ NanoDet accepts geometry before lazy model initialization. The latest geometry i
 
 ## Local crossing counters
 
-The Node panel now displays an in-memory field named **Cruces locales**.
-
-It shows:
+The Node panel displays **Cruces locales**:
 
 - total crossings in the current local counting epoch;
 - `A→B` count;
 - `B→A` count;
 - active geometry revision.
 
-These counters are deliberately ephemeral and local. They reset when a new counting epoch starts and are not sent to Community by this milestone.
+These UI counters are deliberately ephemeral and local. They reset when a new counting epoch starts.
 
-Individual `LineCrossingEvent`s still contain track/event identifiers internally because they are local semantic events. Those identifiers remain behind the edge/privacy boundary and are not part of Community payloads.
+Individual `LineCrossingEvent`s contain track/event identifiers internally because they are local semantic events. Those identifiers stop at the Community collector boundary and are never part of Community bucket persistence or upload envelopes.
+
+## Community aggregation
+
+When Community is configured and an active sensor node exists, the same local crossings feed `CommunityFlowBucketCollector`.
+
+The collector immediately reduces them to coarse counters by:
+
+- node identity;
+- revision-scoped stream;
+- five-minute bucket by default;
+- entity type;
+- public A/B direction;
+- count and confidence sum.
+
+It never persists event ids, track ids, exact crossing timestamps, coordinates, boxes or images.
+
+Low-count cells are suppressed before upload (`minCount = 3` by default). The bucket layer supports offline persistence, crash-idempotent outbox enqueue and recovery of retired geometry streams after browser restart.
+
+See `docs/community-flow-runtime.md` for the complete lifecycle.
 
 ## Persistence and privacy
 
-Database:
+Geometry database:
 
 - `Konta2rCountingGeometryDB`;
 - store: `geometry`;
 - key: `current`.
 
-Only geometry/configuration metadata is persisted.
+Only geometry/configuration metadata is persisted there.
 
-The store contains no:
+Community flow bucket storage is separate and contains reduced counters only. Neither store contains:
 
 - image or video frame;
-- detection;
+- raw detection;
 - bounding box;
 - track identifier;
-- Community node identity;
-- credential.
-
-The local crossing counters introduced by the runtime integration are not persisted by this component.
+- exact crossing point;
+- human authentication token;
+- raw sensor credential.
 
 ## Validation coverage
 
-Tests now verify that:
+Tests verify that:
 
 - counting can be enabled after the pipeline is already running;
 - an empty geometry list disables counting;
 - replacing geometry resets tracker/event history before the next frame;
 - caller mutation cannot alter the active cloned line;
 - geometry supplied to NanoDet before lazy initialization is actually used;
-- the public `resetTrackingAndEvents()` boundary starts a clean trajectory epoch.
+- the public `resetTrackingAndEvents()` boundary starts a clean trajectory epoch;
+- every saved geometry revision receives a distinct operational stream id;
+- the editor's persisted line id is not mutated by runtime stream derivation;
+- only the active stream ingests new Community crossings;
+- retired streams remain only to finish/retry durable buckets;
+- pending streams can be recovered after browser restart.
 
-## Remaining Community gate
+## Remaining external gate
 
-The next step is **not** more line geometry. It is the privacy-preserving aggregation boundary:
+The geometry-to-Community path is implemented in code. What remains before claiming a functioning distributed Community network is operational validation against a **dedicated Konta2r backend**:
 
-1. consume local `LineCrossingEvent`s;
-2. aggregate them into time buckets by direction/entity class;
-3. remove event-level and track-level identity before persistence/synchronization;
-4. feed only aggregate bucket records to the existing Community outbox;
-5. guarantee that missing/deleted geometry means no flow bucket can be produced;
-6. validate offline accumulation, retry/idempotency and bucket closure semantics.
-
-Only after that gate passes should Konta2r claim that a phone is producing Community flow counts.
+1. deploy the Konta2r Supabase project;
+2. apply schema/Edge Functions;
+3. provision real nodes and segments;
+4. run offline/online E2E tests on phones;
+5. verify aggregate rows, retry/idempotency and suppression in the live database;
+6. validate downstream dashboard aggregation and governance/retention policy.
