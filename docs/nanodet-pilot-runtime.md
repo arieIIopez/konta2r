@@ -80,6 +80,56 @@ The Node panel exposes only local operational telemetry:
 
 These values are diagnostic evidence, not a validation score.
 
+## Durable field-pilot evidence
+
+Pilot builds also keep a local performance evidence log in `Konta2rFieldPilotDB`.
+
+The database has separate `sessions` and `samples` stores. A session starts when the node becomes operational and is finalized when it stops. If the browser/app closes before a clean stop, a still-active session is marked `interrupted` when the recorder starts again.
+
+The recorder deliberately does **not** write on every inference. It stores:
+
+- an initial sample;
+- a sample at the configured interval (30 seconds by default);
+- an extra sample when operational state changes materially, such as profile, network, camera, load pressure, detector state or backend;
+- a final sample when the node stops.
+
+This limits write pressure on old phones while preserving the changes needed to interpret long runs.
+
+Each sample can contain only operational data such as:
+
+- active profile;
+- camera resolution/frame rate metadata;
+- online/offline state;
+- observed inference rate;
+- median inference cadence from the runtime health window;
+- processing latency p95 from the runtime health window;
+- dropped-frame ratio;
+- latency drift ratio;
+- load-pressure classification;
+- observation uptime/gaps;
+- detector pilot state/backend;
+- aggregate numeric counts for detections, fused entities and confirmed tracks at the sampled instant.
+
+The recorder never reads Community node identity or credentials.
+
+The package version exported in evidence is sourced directly from `package.json` through `src/version.ts`, preventing a manually duplicated version string from silently drifting.
+
+### Export
+
+`Exportar evidencia piloto` writes one local JSON report for the current or most recent pilot session.
+
+The report contains:
+
+- the session manifest;
+- the sampled runtime series;
+- a summary of the sampled windows;
+- explicit privacy flags;
+- explicit interpretation flags declaring that the file is performance evidence only and does not claim ground-truth accuracy or production selection.
+
+Summary names intentionally retain the word `Window` where appropriate. For example, `latencyP95WindowP95Ms` is the p95 across the sequence of **window-level p95 latency observations**. It is not presented as if raw per-inference latency samples had been retained for the entire session.
+
+Likewise, `observedFpsWindowP50` and `droppedFrameRatioWindowP95` summarize the periodic runtime health windows, not a hidden stream of raw frames.
+
 ## Privacy boundary
 
 The pilot processes camera frames locally.
@@ -92,6 +142,20 @@ This is intentional: a fabricated default geometry would create apparently valid
 
 Community publication remains independent and does not receive event-level detections, tracks, boxes, frames or images.
 
+The field-pilot evidence schema additionally excludes:
+
+- images or frame payloads;
+- bounding boxes;
+- track IDs or event IDs;
+- crossing coordinates;
+- Community node IDs;
+- sensor credentials;
+- human access tokens.
+
+A recursive export guard rejects forbidden keys before a report is returned to the UI.
+
+The evidence file is not uploaded automatically. Export is an explicit local action by the operator.
+
 ## Failure and retry semantics
 
 A failed download or failed ONNX initialization leaves the pilot in an explicit `error` state.
@@ -99,6 +163,8 @@ A failed download or failed ONNX initialization leaves the pilot in an explicit 
 The same `NanoDetPilotPipeline` instance may retry initialization. Before an initialization error is propagated, any partially constructed semantic pipeline/detector is disposed. A failed first attempt therefore cannot leave an orphan ONNX session behind or force a page reload before retrying.
 
 Disposing the pilot while initialization is in flight also prevents the completed detector from becoming active after the node has already been torn down.
+
+Evidence persistence is intentionally non-fatal to inference. If IndexedDB evidence recording/export fails, the UI reports the local evidence error but the detector/runtime is not stopped because of that secondary diagnostic subsystem.
 
 ## Field-test interpretation
 
@@ -110,7 +176,7 @@ It does **not** establish:
 - weights redistribution permission;
 - acceptable precision/recall;
 - acceptable cyclist/motorcyclist fusion accuracy;
-- long-duration thermal stability;
+- long-duration thermal stability unless the run duration actually supports that claim;
 - acceptable performance on old phones as a class;
 - ground-truth counting accuracy.
 
@@ -118,17 +184,15 @@ Those decisions remain behind the benchmark and license gates documented in `doc
 
 ## Minimum pilot procedure
 
-For each test phone record at least:
+For each test phone:
 
-1. device/browser and Konta2r commit;
-2. active runtime profile;
-3. WebGPU availability and actual selected backend;
-4. whether the artifact came from network or verified cache;
-5. model SHA-256 shown by the runtime;
-6. sustained inference cadence and p95 processing latency;
-7. dropped-frame ratio/load pressure;
-8. duration of the run;
-9. visible failure/recovery behavior after stopping/restarting the node;
-10. qualitative scene conditions, without uploading identifiable imagery as part of ordinary node telemetry.
+1. activate the explicit NanoDet pilot build;
+2. start the node and verify the model SHA/backend shown in the UI;
+3. allow the run to reach the duration required by the test protocol;
+4. exercise realistic visibility/network interruptions where appropriate;
+5. stop the node cleanly when possible;
+6. use `Exportar evidencia piloto` to save the JSON evidence;
+7. retain qualitative scene notes separately when they are needed to interpret the run, without placing identifiable imagery in ordinary node telemetry;
+8. compare field-runtime evidence with the separate annotated benchmark outputs before making detector-selection decisions.
 
-The next milestone should turn these observations into reproducible benchmark records and only then compare NanoDet against the other detector candidates.
+The next scientific milestone is to accumulate these reproducible device/runtime records alongside the already implemented annotated detector benchmark, then compare candidates by device stratum rather than selecting a single detector from desktop performance alone.

@@ -1,7 +1,13 @@
 import type { NodeCommunityRuntime } from '../community/nodeCommunityController';
 import type { EdgeMobilityPipelineFrame } from '../pipeline/edgeMobilityPipeline';
 import type { PwaRuntimeState } from '../pwa/register';
+import { KONTA2R_VERSION } from '../version';
 import { NODE_PROFILE_SETTINGS, type NodePerformanceProfile } from './deviceProfile';
+import {
+  FieldPilotEvidenceRecorder,
+  type FieldPilotSemanticSnapshot,
+} from './fieldPilotEvidence';
+import { IndexedDbFieldPilotEvidenceStore } from './indexedDbFieldPilotEvidence';
 import type { InferenceLoopState } from './inferenceLoop';
 import { NodeCommunityPanel } from './nodeCommunityPanel';
 import type { NodePilotPipeline, NodePilotPipelineFactory } from './pilotPipeline';
@@ -13,11 +19,7 @@ export interface NodePanelOptions {
   pilotPipelineFactory?: NodePilotPipelineFactory;
 }
 
-interface PilotFrameStats {
-  detections: number;
-  fusedEntities: number;
-  confirmedTracks: number;
-}
+interface PilotFrameStats extends FieldPilotSemanticSnapshot {}
 
 function formatBytes(value: number | undefined): string {
   if (value === undefined) return '—';
@@ -36,6 +38,18 @@ function setText(root: HTMLElement, selector: string, value: string): void {
   if (element) element.textContent = value;
 }
 
+function downloadText(filename: string, text: string, type: string): void {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export class NodePanel {
   private readonly runtime = new NodeRuntimeController();
   private readonly pwa: PwaRuntimeState;
@@ -43,11 +57,14 @@ export class NodePanel {
   private readonly communityPanel: NodeCommunityPanel;
   private readonly pilotPipeline: NodePilotPipeline | null;
   private readonly inferenceBridge: RuntimeInferenceBridge<EdgeMobilityPipelineFrame> | null;
+  private readonly fieldPilotEvidence: FieldPilotEvidenceRecorder | null;
   private root: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
   private pilotLoopState: InferenceLoopState = 'idle';
   private pilotFrameStats: PilotFrameStats | null = null;
   private pilotError: string | undefined;
+  private evidenceStatus = 'sin sesión';
+  private evidenceError: string | undefined;
 
   constructor(
     pwa: PwaRuntimeState,
@@ -60,6 +77,11 @@ export class NodePanel {
     this.pilotPipeline = options.pilotPipelineFactory?.(
       () => NODE_PROFILE_SETTINGS[this.runtime.snapshot().profile].maxDetections,
     ) ?? null;
+    this.fieldPilotEvidence = this.pilotPipeline
+      ? new FieldPilotEvidenceRecorder(new IndexedDbFieldPilotEvidenceStore(), {
+          softwareVersion: KONTA2R_VERSION,
+        })
+      : null;
     this.inferenceBridge = this.pilotPipeline
       ? new RuntimeInferenceBridge(this.runtime, this.pilotPipeline, {
           onFrame: (frame) => {
@@ -68,15 +90,18 @@ export class NodePanel {
               fusedEntities: frame.fusion.entities.length,
               confirmedTracks: frame.tracking.confirmedTracks.length,
             };
+            void this.recordPilotEvidence();
             this.renderPilot();
           },
           onStateChange: (state) => {
             this.pilotLoopState = state;
             if (state !== 'error') this.pilotError = undefined;
+            void this.recordPilotEvidence();
             this.renderPilot();
           },
           onError: (error) => {
             this.pilotError = error.message;
+            void this.recordPilotEvidence();
             this.renderPilot();
           },
         })
@@ -127,7 +152,9 @@ export class NodePanel {
             </select>
           </label>
           <button class="action" data-persist>Proteger almacenamiento</button>
+          <button class="action" data-pilot-export>Exportar evidencia piloto</button>
         </div>
+        <p class="runtime-note" data-pilot-evidence-status></p>
         <div class="community-slot" data-community-mount></div>
         <p class="runtime-note" data-hints></p>
         <p class="runtime-error hidden" data-error></p>
@@ -145,10 +172,25 @@ export class NodePanel {
     root.querySelector<HTMLButtonElement>('[data-start]')?.addEventListener('click', () => void this.runtime.start());
     root.querySelector<HTMLButtonElement>('[data-stop]')?.addEventListener('click', () => void this.runtime.stop());
     root.querySelector<HTMLButtonElement>('[data-persist]')?.addEventListener('click', () => void this.runtime.inspectStorage(true));
+    root.querySelector<HTMLButtonElement>('[data-pilot-export]')?.addEventListener('click', () => void this.exportPilotEvidence());
     root.querySelector<HTMLSelectElement>('[data-profile-select]')?.addEventListener('change', (event) => {
       const value = (event.currentTarget as HTMLSelectElement).value as NodePerformanceProfile;
       void this.runtime.setProfile(value);
     });
+
+    if (this.fieldPilotEvidence) {
+      this.evidenceStatus = 'preparando registro local…';
+      void this.fieldPilotEvidence.initialize()
+        .then(() => {
+          this.evidenceStatus = 'registro piloto listo · muestreo local durable cada 30 s y ante cambios de estado';
+          this.evidenceError = undefined;
+          this.renderEvidenceStatus();
+        })
+        .catch((error: unknown) => {
+          this.evidenceError = error instanceof Error ? error.message : String(error);
+          this.renderEvidenceStatus();
+        });
+    }
 
     this.unsubscribe?.();
     this.unsubscribe = this.runtime.subscribe((snapshot) => this.update(snapshot));
@@ -158,6 +200,7 @@ export class NodePanel {
 
   destroy(): void {
     this.unsubscribe?.();
+    void this.fieldPilotEvidence?.interruptActive();
     this.inferenceBridge?.detachVideo();
     if (this.inferenceBridge) void this.inferenceBridge.dispose();
     this.communityPanel.destroy();
@@ -167,6 +210,7 @@ export class NodePanel {
   }
 
   private update(snapshot: NodeRuntimeSnapshot): void {
+    void this.recordPilotEvidence(snapshot);
     const root = this.root;
     if (!root) return;
     const profileSettings = NODE_PROFILE_SETTINGS[snapshot.profile];
@@ -227,6 +271,8 @@ export class NodePanel {
     }
     const persist = root.querySelector<HTMLButtonElement>('[data-persist]');
     if (persist) persist.disabled = snapshot.storage?.persistent === true;
+    const exportButton = root.querySelector<HTMLButtonElement>('[data-pilot-export]');
+    if (exportButton) exportButton.disabled = this.fieldPilotEvidence === null;
 
     const memory = snapshot.hints.deviceMemoryGiB === undefined ? '' : ` · ~${snapshot.hints.deviceMemoryGiB} GiB RAM reportada`;
     setText(root, '[data-hints]', `Arranque automático: ${snapshot.hints.hardwareConcurrency} hilos lógicos · ${snapshot.hints.webgpu ? 'WebGPU disponible' : 'sin WebGPU'}${memory}. El desempeño medido tendrá prioridad sobre estos hints.`);
@@ -248,6 +294,7 @@ export class NodePanel {
       setText(root, '[data-detector-detail]', 'build estándar · sin detector experimental');
       setText(root, '[data-semantic]', 'sin loop');
       setText(root, '[data-semantic-detail]', 'la cámara puede operar sin inferencia');
+      this.renderEvidenceStatus();
       return;
     }
 
@@ -274,5 +321,55 @@ export class NodePanel {
     setText(root, '[data-semantic-detail]', frame
       ? `${frame.detections} detecciones · ${frame.fusedEntities} entidades · ${frame.confirmedTracks} tracks confirmados`
       : 'sin frame procesado aún');
+    this.renderEvidenceStatus();
+  }
+
+  private async recordPilotEvidence(snapshot = this.runtime.snapshot()): Promise<void> {
+    if (!this.fieldPilotEvidence || !this.pilotPipeline) return;
+    try {
+      await this.fieldPilotEvidence.observe(
+        snapshot,
+        this.pilotPipeline.snapshot(),
+        this.pilotFrameStats ?? undefined,
+      );
+      this.evidenceStatus = snapshot.running
+        ? 'registrando evidencia piloto local · sin imágenes ni identificadores de tracks'
+        : 'evidencia piloto disponible para exportación local';
+      this.evidenceError = undefined;
+    } catch (error) {
+      this.evidenceError = error instanceof Error ? error.message : String(error);
+    }
+    this.renderEvidenceStatus();
+  }
+
+  private async exportPilotEvidence(): Promise<void> {
+    if (!this.fieldPilotEvidence) return;
+    try {
+      const report = await this.fieldPilotEvidence.exportCurrentOrLatest();
+      if (!report) {
+        this.evidenceStatus = 'todavía no existe una sesión piloto para exportar';
+        this.renderEvidenceStatus();
+        return;
+      }
+      const filename = `konta2r-field-pilot-${report.session.sessionId}.json`;
+      downloadText(filename, `${JSON.stringify(report, null, 2)}\n`, 'application/json');
+      this.evidenceStatus = `evidencia exportada · ${report.summary.sampleCount} muestras · ${formatDuration(report.summary.durationMs)}`;
+      this.evidenceError = undefined;
+    } catch (error) {
+      this.evidenceError = error instanceof Error ? error.message : String(error);
+    }
+    this.renderEvidenceStatus();
+  }
+
+  private renderEvidenceStatus(): void {
+    const root = this.root;
+    if (!root) return;
+    const exportButton = root.querySelector<HTMLButtonElement>('[data-pilot-export]');
+    if (exportButton) exportButton.disabled = this.fieldPilotEvidence === null;
+    setText(root, '[data-pilot-evidence-status]', this.fieldPilotEvidence
+      ? this.evidenceError
+        ? `Registro piloto: error local — ${this.evidenceError}`
+        : `Registro piloto: ${this.evidenceStatus}`
+      : 'Registro piloto: desactivado en el build estándar.');
   }
 }
