@@ -62,6 +62,7 @@ function runtimeSnapshot(): NodeRuntimeSnapshot {
 
 function bucket(): ClosedCommunityFlowBucket {
   return {
+    nodeId: 'node_bucket01',
     streamId: 'line_main',
     bucketStartMs: 1_788_000_000_000,
     bucketEndMs: 1_788_000_300_000,
