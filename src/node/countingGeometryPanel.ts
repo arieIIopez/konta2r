@@ -12,7 +12,6 @@ export class CountingGeometryPanel {
     store: new IndexedDbCountingGeometryStore(),
     lineId: 'line_primary',
   });
-  private root: HTMLElement | null = null;
   private controls: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
 
@@ -24,7 +23,6 @@ export class CountingGeometryPanel {
     if (!video || !cameraWrap || !runtimeControls) {
       throw new Error('Counting geometry requires the mounted node camera UI');
     }
-    this.root = nodeRoot;
     const controls = document.createElement('section');
     controls.className = 'counting-geometry-panel';
     controls.innerHTML = `
@@ -72,7 +70,6 @@ export class CountingGeometryPanel {
     this.editor.destroy();
     this.controls?.remove();
     this.controls = null;
-    this.root = null;
   }
 
   private render(snapshot: CountingGeometryEditorSnapshot): void {
@@ -82,6 +79,7 @@ export class CountingGeometryPanel {
     const line = snapshot.draft ?? configuration?.line;
     const revision = configuration?.revision;
     const status = controls.querySelector<HTMLElement>('[data-geometry-status]');
+    status?.classList.remove('runtime-on');
 
     if (!snapshot.loaded) {
       setText(controls, '[data-geometry-title]', 'Cargando…');
@@ -103,10 +101,7 @@ export class CountingGeometryPanel {
     } else {
       setText(controls, '[data-geometry-title]', 'Sin geometría');
       setText(controls, '[data-geometry-detail]', 'No existe una línea persistida. Community no debe publicar conteos de flujo sin esta configuración.');
-      if (status) {
-        status.textContent = '○ no configurada';
-        status.classList.remove('runtime-on');
-      }
+      if (status) status.textContent = '○ no configurada';
     }
 
     const edit = controls.querySelector<HTMLButtonElement>('[data-geometry-edit]');
