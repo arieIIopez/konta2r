@@ -32,9 +32,10 @@
 - [ ] eventos `zone_enter` / `zone_exit`;
 - [x] tests unitarios con trayectorias sintéticas;
 - [x] prevención de doble conteo por oscilación mediante intervalo mínimo/deadzone;
-- [x] adaptación de geometría normalizada a cambios de resolución/aspect ratio dentro del motor de conteo.
+- [x] adaptación de geometría normalizada a cambios de resolución/aspect ratio dentro del motor de conteo;
+- [x] geometría de línea creada en terreno, versionada y conectada al runtime de conteo.
 
-**Estado:** el conteo por línea está implementado; faltan zonas/polígonos y, sobre todo, una UI de terreno para definir la geometría real antes de publicar conteos Community.
+**Estado:** el conteo por línea está implementado de extremo a extremo en el nodo; faltan zonas/polígonos y su validación en terreno.
 
 ---
 
@@ -126,9 +127,12 @@
 - [x] publicación crash-idempotent bucket → outbox;
 - [x] aislamiento de buckets por `nodeId` frente a reprovisión;
 - [x] telemetría/runtime metadata sin inventar sensores inaccesibles al navegador;
-- [x] calidad marcada como provisional mientras falte ground truth independiente.
+- [x] calidad marcada como provisional mientras falte ground truth independiente;
+- [x] streams separados por revisión de geometría antes de supresión/publicación;
+- [x] recuperación de buckets pendientes de revisiones retiradas tras reinicio del navegador;
+- [x] bridge runtime `LineCrossingEvent → agregado Community` sin persistir eventos individuales.
 
-**Estado:** el modo Community ya tiene una frontera de privacidad mucho más estricta que el modo profesional/local. No deben confundirse ambos objetivos de persistencia.
+**Estado:** la frontera privacy-first Community está implementada en código. Falta verificarla E2E contra un backend Konta2r dedicado y definir gobernanza/retención pública.
 
 ---
 
@@ -145,14 +149,15 @@
 - [x] operación del piloto detector desde la pantalla de nodo;
 - [x] exportación local de evidencia de rendimiento del piloto;
 - [x] UI de administración de nodo Community separando auth humana de credencial sensor;
-- [ ] creación táctil de líneas y polígonos sobre cámara;
+- [x] creación táctil y versionada de líneas sobre cámara;
+- [ ] creación táctil de polígonos sobre cámara;
 - [ ] selector/overlay configurable de categorías visibles;
 - [ ] modo oscuro/alto contraste específico de terreno;
 - [ ] exportación completa de sesión profesional;
 - [ ] importación de configuración de levantamiento;
 - [ ] recuperación integral de una sesión profesional tras cierre accidental.
 
-**Estado:** el nodo ya funciona como runtime/PWA; el próximo gran faltante visible es la configuración geométrica de terreno.
+**Estado:** la operación de línea ya está integrada con conteo local y agregación Community. Los próximos faltantes visibles son polígonos y las funciones del modo profesional.
 
 ---
 
@@ -212,7 +217,8 @@
 - [x] buckets de flujo privacy-first;
 - [x] publicación idempotente y aislamiento por identidad;
 - [x] UI local de administración Community;
-- [ ] conectar conteos Community a una línea creada/configurada realmente en terreno;
+- [x] conectar conteos Community a una línea creada/configurada realmente en terreno;
+- [x] mantener/recover streams de revisiones retiradas sin mezclar eventos individuales;
 - [ ] desplegar Supabase en un proyecto dedicado Konta2r;
 - [ ] pruebas E2E contra ese backend dedicado;
 - [ ] dashboard/mapa comunitario de agregados;
@@ -224,14 +230,14 @@
 
 # Prioridad inmediata actualizada
 
-El orden anterior `geometría → tracking → detector → fusión modal → almacenamiento → interfaz` ya produjo implementaciones funcionales en esos componentes. Desde este punto la prioridad cambia de **construir piezas aisladas** a **cerrar evidencia e integración de terreno**:
+El orden inicial ya produjo implementaciones funcionales en geometría, tracking, detector, fusión modal, persistencia, PWA y la frontera Community. Desde este punto la prioridad cambia de **construir piezas aisladas** a **validar el sistema completo y producir evidencia**:
 
 1. **ensayos reales del piloto en teléfonos `eco / balanced / performance`** y acumulación de evidencia durable;
-2. **benchmark científico de detector y tracking** sobre corpus congelado;
+2. **benchmark científico de detector, tracking y error de conteo** sobre corpus congelado;
 3. **calibración de fusión modal** con ground truth;
-4. **editor táctil de línea/polígono** y configuración versionada de levantamiento;
-5. conectar esa geometría real al pipeline `EdgeMobilityPipeline → CommunityFlowBucketPublisher`;
-6. desplegar backend dedicado Konta2r y ejecutar E2E cuando exista proyecto Supabase autorizado;
-7. recién entonces consolidar modelos por perfil y avanzar a métricas espaciales/calibración.
+4. desplegar un **backend Supabase dedicado Konta2r** y ejecutar E2E offline/online cuando exista proyecto autorizado;
+5. validar queries/dashboard de agregados, retención y gobernanza Community;
+6. desarrollar polígonos/eventos de zona y cerrar la configuración versionada de levantamiento profesional;
+7. avanzar a métricas espaciales/calibración sólo cuando exista evidencia geométrica suficiente.
 
 La regla metodológica se mantiene: Konta2r no declarará precisión, calidad, anonimato ni selección de modelo por intuición. Cada afirmación deberá corresponder a una métrica reproducible o a una garantía explícita de arquitectura.
