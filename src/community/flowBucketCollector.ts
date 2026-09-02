@@ -1,3 +1,4 @@
+import { isValidNodeId } from '../backend/nodeCredential';
 import type { CrossingDirection, LineCrossingEvent } from '../core/types';
 import type { CommunityDirection, PublicFlowAggregate } from './protocol';
 import type {
@@ -15,6 +16,7 @@ export interface CommunityFlowBucketCollectorOptions {
 }
 
 export interface ClosedCommunityFlowBucket {
+  nodeId: string;
   streamId: string;
   bucketStartMs: number;
   bucketEndMs: number;
@@ -36,6 +38,11 @@ function validateEpochMs(value: number): number {
     throw new Error('Community bucket observation clock must be a non-negative integer epoch');
   }
   return value;
+}
+
+function validateNodeId(nodeId: string): string {
+  if (!isValidNodeId(nodeId)) throw new Error('Invalid Konta2r node id for Community collector');
+  return nodeId;
 }
 
 /**
@@ -66,9 +73,11 @@ export class CommunityFlowBucketCollector {
   }
 
   async observe(
+    nodeIdInput: string,
     crossings: readonly LineCrossingEvent[],
     observedAtEpochMs: number,
   ): Promise<void> {
+    const nodeId = validateNodeId(nodeIdInput);
     const observedAt = validateEpochMs(observedAtEpochMs);
     const bucketStartMs = Math.floor(observedAt / this.bucketMs) * this.bucketMs;
     const bucketEndMs = bucketStartMs + this.bucketMs;
@@ -84,6 +93,7 @@ export class CommunityFlowBucketCollector {
         existing.qualitySum += clamp01(event.confidence);
       } else {
         deltas.set(key, {
+          nodeId,
           streamId: this.streamId,
           bucketStartMs,
           bucketEndMs,
@@ -98,13 +108,14 @@ export class CommunityFlowBucketCollector {
     for (const delta of deltas.values()) await this.store.add(delta);
   }
 
-  async closed(nowEpochMs: number): Promise<ClosedCommunityFlowBucket[]> {
+  async closed(nodeIdInput: string, nowEpochMs: number): Promise<ClosedCommunityFlowBucket[]> {
+    const nodeId = validateNodeId(nodeIdInput);
     const now = validateEpochMs(nowEpochMs);
-    const starts = await this.store.listClosedBucketStarts(this.streamId, now);
+    const starts = await this.store.listClosedBucketStarts(nodeId, this.streamId, now);
     const result: ClosedCommunityFlowBucket[] = [];
 
     for (const bucketStartMs of starts) {
-      const cells = await this.store.listBucket(this.streamId, bucketStartMs);
+      const cells = await this.store.listBucket(nodeId, this.streamId, bucketStartMs);
       if (cells.length === 0) continue;
       const bucketEndMs = cells[0]?.bucketEndMs ?? bucketStartMs + this.bucketMs;
       let suppressedCount = 0;
@@ -130,6 +141,7 @@ export class CommunityFlowBucketCollector {
         || a.direction.localeCompare(b.direction)
       ));
       result.push({
+        nodeId,
         streamId: this.streamId,
         bucketStartMs,
         bucketEndMs,
@@ -141,7 +153,8 @@ export class CommunityFlowBucketCollector {
   }
 
   /** Commit only after enqueue succeeded, or when an empty low-count bucket was deliberately suppressed. */
-  async commit(bucketStartMs: number): Promise<void> {
-    await this.store.deleteBucket(this.streamId, bucketStartMs);
+  async commit(nodeIdInput: string, bucketStartMs: number): Promise<void> {
+    const nodeId = validateNodeId(nodeIdInput);
+    await this.store.deleteBucket(nodeId, this.streamId, bucketStartMs);
   }
 }
