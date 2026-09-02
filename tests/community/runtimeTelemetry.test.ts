@@ -41,6 +41,7 @@ function runtimeSnapshot(): NodeRuntimeSnapshot {
     health: {
       sampleCount: 100,
       observedFps: 4.8,
+      inferenceFpsP50: 4.7,
       processingLatencyP95Ms: 190,
       droppedFrameRatio: 0.08,
       loadPressure: 'nominal',
@@ -83,7 +84,7 @@ describe('Community runtime telemetry', () => {
     const summary = communityRuntimeSummary(runtimeSnapshot(), detector());
     expect(summary).toEqual({
       uptimeRatio: 0.95,
-      inferenceFpsP50: 4.8,
+      inferenceFpsP50: 4.7,
       inferenceLatencyP95Ms: 190,
       droppedFrameRatio: 0.08,
       runtimeBackend: 'wasm',
