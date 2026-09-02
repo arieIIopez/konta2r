@@ -4,6 +4,7 @@ export type NodeLoadPressure = 'unknown' | 'nominal' | 'elevated' | 'critical';
 
 export interface NodeHealthSnapshot extends RuntimePerformanceSnapshot {
   sampleCount: number;
+  inferenceFpsP50: number;
   loadPressure: NodeLoadPressure;
   latencyDriftRatio: number;
 }
@@ -27,6 +28,20 @@ function percentile(sorted: readonly number[], fraction: number): number {
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+function medianCadenceFps(samples: readonly ProcessingSample[]): number {
+  if (samples.length < 2) return 0;
+  const fps: number[] = [];
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    if (!previous || !current) continue;
+    const intervalMs = current.timestampMs - previous.timestampMs;
+    if (intervalMs > 0) fps.push(1000 / intervalMs);
+  }
+  fps.sort((a, b) => a - b);
+  return percentile(fps, 0.5);
 }
 
 /**
@@ -69,6 +84,7 @@ export class NodeHealthMonitor {
       return {
         sampleCount: 0,
         observedFps: 0,
+        inferenceFpsP50: 0,
         processingLatencyP95Ms: 0,
         droppedFrameRatio: 1,
         loadPressure: 'unknown',
@@ -80,6 +96,7 @@ export class NodeHealthMonitor {
     const last = samples.at(-1)?.timestampMs ?? nowMs;
     const elapsedSeconds = Math.max(0.001, (last - first) / 1000);
     const observedFps = samples.length <= 1 ? 0 : (samples.length - 1) / elapsedSeconds;
+    const inferenceFpsP50 = medianCadenceFps(samples);
     const expectedFrames = Math.max(1, elapsedSeconds * this.expectedFps);
     const droppedFrameRatio = clamp01(1 - (Math.max(0, samples.length - 1) / expectedFrames));
     const latencies = samples.map((sample) => sample.processingMs).sort((a, b) => a - b);
@@ -110,6 +127,7 @@ export class NodeHealthMonitor {
     return {
       sampleCount: samples.length,
       observedFps,
+      inferenceFpsP50,
       processingLatencyP95Ms,
       droppedFrameRatio,
       loadPressure,
