@@ -32,6 +32,8 @@ export interface CommunityBatchDraft {
 export interface CommunityEnqueueOptions {
   /** Local-only stable key used to make bucket→outbox publication crash-idempotent. */
   publicationKey?: string;
+  /** Prevents a bucket observed by one node from being attributed after a reprovision race. */
+  expectedNodeId?: string;
 }
 
 export interface CommunityDeliveryRuntimeOptions {
@@ -106,6 +108,9 @@ export function createCommunityDeliveryRuntime(
     async enqueue(draft, enqueueOptions = {}): Promise<CommunityOutboxItem> {
       const active = await options.activeNode();
       if (!active) throw new Error('An active Konta2r node is required to enqueue Community data');
+      if (enqueueOptions.expectedNodeId !== undefined && active.nodeId !== enqueueOptions.expectedNodeId) {
+        throw new Error('Active Konta2r node changed before Community enqueue');
+      }
       const generatedAtMs = validNow(nowMs);
       const sequence = enqueueOptions.publicationKey === undefined
         ? await options.sequences.next(active.nodeId)
