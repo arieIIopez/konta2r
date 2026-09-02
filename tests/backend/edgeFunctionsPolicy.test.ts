@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import configToml from '../../supabase/config.toml?raw';
+import vaultSql from '../../supabase/vault.sql?raw';
 import enrollFunction from '../../supabase/functions/node-enroll/index.ts?raw';
 import lifecycleFunction from '../../supabase/functions/node-lifecycle/index.ts?raw';
 import ingestFunction from '../../supabase/functions/ingest-community/index.ts?raw';
+import credentialPepper from '../../supabase/functions/_shared/credentialPepper.ts?raw';
 import postgresShared from '../../supabase/functions/_shared/postgres.ts?raw';
 import authShared from '../../supabase/functions/_shared/supabaseAuth.ts?raw';
 import storesShared from '../../supabase/functions/_shared/postgresStores.ts?raw';
@@ -37,15 +39,26 @@ describe('Supabase Edge Function policy', () => {
     expect(ingestFunction).not.toContain("replace('Bearer '");
   });
 
-  it('pins direct Postgres and versions node credentials only through server environment values', () => {
+  it('pins direct Postgres while keeping node peppers encrypted in Supabase Vault', () => {
     expect(postgresShared).toContain("npm:postgres@3.4.9");
     expect(postgresShared).toContain("requiredEnv('SUPABASE_DB_URL')");
     expect(postgresShared).toContain('prepare: false');
-    expect(postgresShared).toContain('KONTA2R_NODE_TOKEN_ACTIVE_KEY_VERSION');
-    expect(postgresShared).toContain('KONTA2R_NODE_TOKEN_PEPPER_V');
+    expect(postgresShared).not.toContain('KONTA2R_NODE_TOKEN_PEPPER_V');
+    expect(credentialPepper).toContain('vault.decrypted_secrets');
+    expect(credentialPepper).toContain('konta2r_node_token_pepper_v');
+    expect(credentialPepper).toContain('KONTA2R_NODE_TOKEN_ACTIVE_KEY_VERSION');
+    expect(vaultSql).toContain('vault.create_secret');
+    expect(vaultSql).toContain('extensions.gen_random_bytes(48)');
+    expect(vaultSql).not.toMatch(/konta2r_node_token_pepper_v1\s*=|REPLACE_WITH_RANDOM_SECRET/);
     expect(storesShared).toContain('private.community_batches');
     expect(storesShared).toContain('private.node_credentials');
     expect(storesShared).not.toMatch(/service[_-]?role|sb_secret_/i);
+  });
+
+  it('uses Vault for enrollment, rotation and sensor verification', () => {
+    expect(enrollFunction).toContain('await pepperForKeyVersion(sql, keyVersion)');
+    expect(lifecycleFunction).toContain('await pepperForKeyVersion(sql, keyVersion)');
+    expect(ingestFunction).toContain('pepperForKeyVersion: (keyVersion) => pepperForKeyVersion(sql, keyVersion)');
   });
 
   it('serializes lifecycle writes and appends audit evidence inside explicit transactions', () => {
@@ -66,9 +79,9 @@ describe('Supabase Edge Function policy', () => {
     expect(storesShared).toContain('credential_hmac');
   });
 
-  it('never logs the one-time raw node credential in enrollment or lifecycle endpoints', () => {
-    expect(enrollFunction).toContain('Never log it');
+  it('never logs raw node credentials', () => {
     expect(enrollFunction).not.toMatch(/console\.(log|info|debug).*credential/i);
     expect(lifecycleFunction).not.toMatch(/console\.(log|info|debug).*credential/i);
+    expect(ingestFunction).not.toMatch(/console\.(log|info|debug).*authorization/i);
   });
 });
