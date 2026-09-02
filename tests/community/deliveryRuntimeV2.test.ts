@@ -168,6 +168,28 @@ describe('Community delivery runtime v2', () => {
     expect(await outbox.count()).toBe(0);
   });
 
+  it('rejects enqueue if the active identity no longer matches the source bucket node', async () => {
+    const outbox = new MemoryOutbox();
+    const sequences = new MemorySequences();
+    const current = active('node_delivery02', 'segment-b', 8);
+    const runtime = createCommunityDeliveryRuntime({
+      endpoint: 'https://example.test/ingest',
+      activeNode: async () => current,
+      outbox,
+      sequences,
+      nowMs: () => 1_788_000_400_000,
+    });
+
+    await expect(runtime.enqueue(draft(), {
+      publicationKey: 'flow-v2:node_delivery01:line:100:200',
+      expectedNodeId: 'node_delivery01',
+    })).rejects.toThrow(/changed before Community enqueue/i);
+
+    expect(await outbox.count()).toBe(0);
+    expect(await sequences.peek(current.nodeId)).toBeUndefined();
+    expect(sequences.reservations.size).toBe(0);
+  });
+
   it('flushes only the currently active node after identity changes', async () => {
     const outbox = new MemoryOutbox();
     const sequences = new MemorySequences();
