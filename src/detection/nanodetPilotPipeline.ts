@@ -4,6 +4,7 @@ import { EdgeMobilityPipeline } from '../pipeline/edgeMobilityPipeline';
 import {
   loadNanoDetPilot,
   type NanoDetPilotArtifactSource,
+  type NanoDetPilotLoadResult,
   type NanoDetPilotLoaderOptions,
 } from './onnx/nanodetPilot';
 
@@ -17,8 +18,13 @@ export interface NanoDetPilotPipelineSnapshot {
   error?: string;
 }
 
+export type NanoDetPilotLoader = (
+  options: NanoDetPilotLoaderOptions,
+) => Promise<NanoDetPilotLoadResult>;
+
 export interface NanoDetPilotPipelineOptions extends NanoDetPilotLoaderOptions {
   sessionId?: string;
+  loader?: NanoDetPilotLoader;
 }
 
 function localSessionId(): string {
@@ -38,6 +44,7 @@ function normalizeError(error: unknown): string {
  */
 export class NanoDetPilotPipeline {
   private readonly options: NanoDetPilotPipelineOptions;
+  private readonly loader: NanoDetPilotLoader;
   private pipeline: EdgeMobilityPipeline | null = null;
   private initialization: DetectorInitialization | null = null;
   private initializationPromise: Promise<DetectorInitialization> | null = null;
@@ -46,6 +53,7 @@ export class NanoDetPilotPipeline {
 
   constructor(options: NanoDetPilotPipelineOptions = {}) {
     this.options = options;
+    this.loader = options.loader ?? loadNanoDetPilot;
   }
 
   snapshot(): NanoDetPilotPipelineSnapshot {
@@ -92,7 +100,7 @@ export class NanoDetPilotPipeline {
 
   private async initializeOnce(): Promise<DetectorInitialization> {
     try {
-      const loaded = await loadNanoDetPilot(this.options);
+      const loaded = await this.loader(this.options);
       if (this.disposed) {
         await loaded.detector.dispose();
         throw new Error('NanoDet pilot pipeline was disposed during initialization');
