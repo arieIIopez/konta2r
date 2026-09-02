@@ -2,6 +2,7 @@ import type { NodeCommunityRuntime } from '../community/nodeCommunityController'
 import type { EdgeMobilityPipelineFrame } from '../pipeline/edgeMobilityPipeline';
 import type { PwaRuntimeState } from '../pwa/register';
 import { KONTA2R_VERSION } from '../version';
+import type { CountingGeometryConfiguration } from './countingGeometry';
 import { NODE_PROFILE_SETTINGS, type NodePerformanceProfile } from './deviceProfile';
 import {
   FieldPilotEvidenceRecorder,
@@ -20,6 +21,15 @@ export interface NodePanelOptions {
 }
 
 interface PilotFrameStats extends FieldPilotSemanticSnapshot {}
+
+interface LocalCrossingCounts {
+  aToB: number;
+  bToA: number;
+}
+
+function emptyCrossingCounts(): LocalCrossingCounts {
+  return { aToB: 0, bToA: 0 };
+}
 
 function formatBytes(value: number | undefined): string {
   if (value === undefined) return '—';
@@ -65,6 +75,9 @@ export class NodePanel {
   private pilotError: string | undefined;
   private evidenceStatus = 'sin sesión';
   private evidenceError: string | undefined;
+  private countingGeometry: CountingGeometryConfiguration | undefined;
+  private countingGeometryKey = 'none';
+  private localCrossings = emptyCrossingCounts();
 
   constructor(
     pwa: PwaRuntimeState,
@@ -90,6 +103,10 @@ export class NodePanel {
               fusedEntities: frame.fusion.entities.length,
               confirmedTracks: frame.tracking.confirmedTracks.length,
             };
+            for (const crossing of frame.crossings) {
+              if (crossing.direction === 'LEFT_TO_RIGHT') this.localCrossings.aToB += 1;
+              else this.localCrossings.bToA += 1;
+            }
             void this.recordPilotEvidence();
             this.renderPilot();
           },
@@ -133,6 +150,7 @@ export class NodePanel {
             <div class="runtime-stat"><span>Cámara</span><strong data-camera>—</strong><small data-camera-detail>—</small></div>
             <div class="runtime-stat"><span>Detector</span><strong data-detector>—</strong><small data-detector-detail>—</small></div>
             <div class="runtime-stat"><span>Semántica</span><strong data-semantic>—</strong><small data-semantic-detail>—</small></div>
+            <div class="runtime-stat"><span>Cruces locales</span><strong data-crossings>0</strong><small data-crossings-detail>sin geometría operacional</small></div>
             <div class="runtime-stat"><span>Carga</span><strong data-load>—</strong><small data-load-detail>—</small></div>
             <div class="runtime-stat"><span>Continuidad</span><strong data-continuity>—</strong><small data-continuity-detail>—</small></div>
             <div class="runtime-stat"><span>Wake lock</span><strong data-wake>—</strong><small data-wake-detail>—</small></div>
@@ -169,13 +187,13 @@ export class NodePanel {
     if (!communityMount) throw new Error('Missing Community node surface');
     this.communityPanel.mount(communityMount);
 
-    root.querySelector<HTMLButtonElement>('[data-start]')?.addEventListener('click', () => void this.runtime.start());
+    root.querySelector<HTMLButtonElement>('[data-start]')?.addEventListener('click', () => void this.startNode());
     root.querySelector<HTMLButtonElement>('[data-stop]')?.addEventListener('click', () => void this.runtime.stop());
     root.querySelector<HTMLButtonElement>('[data-persist]')?.addEventListener('click', () => void this.runtime.inspectStorage(true));
     root.querySelector<HTMLButtonElement>('[data-pilot-export]')?.addEventListener('click', () => void this.exportPilotEvidence());
     root.querySelector<HTMLSelectElement>('[data-profile-select]')?.addEventListener('change', (event) => {
       const value = (event.currentTarget as HTMLSelectElement).value as NodePerformanceProfile;
-      void this.runtime.setProfile(value);
+      void this.changeProfile(value);
     });
 
     if (this.fieldPilotEvidence) {
@@ -198,6 +216,24 @@ export class NodePanel {
     void this.runtime.inspectStorage(false);
   }
 
+  /**
+   * Applies one saved operational geometry epoch. Undefined disables counting.
+   * Every state transition starts fresh local counters because tracking/event
+   * history is reset at the pipeline boundary as well.
+   */
+  setCountingGeometry(configuration: CountingGeometryConfiguration | undefined): void {
+    const nextKey = configuration
+      ? `${configuration.configurationId}:${configuration.revision}`
+      : 'none';
+    if (nextKey === this.countingGeometryKey) return;
+
+    this.countingGeometryKey = nextKey;
+    this.countingGeometry = configuration === undefined ? undefined : structuredClone(configuration);
+    this.localCrossings = emptyCrossingCounts();
+    this.pilotPipeline?.setCountingLines(configuration ? [configuration.line] : []);
+    this.renderCrossings();
+  }
+
   destroy(): void {
     this.unsubscribe?.();
     void this.fieldPilotEvidence?.interruptActive();
@@ -207,6 +243,20 @@ export class NodePanel {
     this.community.destroy();
     this.runtime.destroy();
     this.root = null;
+  }
+
+  private async startNode(): Promise<void> {
+    this.localCrossings = emptyCrossingCounts();
+    this.pilotPipeline?.resetTrackingAndEvents();
+    this.renderCrossings();
+    await this.runtime.start();
+  }
+
+  private async changeProfile(profile: NodePerformanceProfile): Promise<void> {
+    this.localCrossings = emptyCrossingCounts();
+    this.pilotPipeline?.resetTrackingAndEvents();
+    this.renderCrossings();
+    await this.runtime.setProfile(profile);
   }
 
   private update(snapshot: NodeRuntimeSnapshot): void {
@@ -294,6 +344,7 @@ export class NodePanel {
       setText(root, '[data-detector-detail]', 'build estándar · sin detector experimental');
       setText(root, '[data-semantic]', 'sin loop');
       setText(root, '[data-semantic-detail]', 'la cámara puede operar sin inferencia');
+      this.renderCrossings();
       this.renderEvidenceStatus();
       return;
     }
@@ -321,7 +372,28 @@ export class NodePanel {
     setText(root, '[data-semantic-detail]', frame
       ? `${frame.detections} detecciones · ${frame.fusedEntities} entidades · ${frame.confirmedTracks} tracks confirmados`
       : 'sin frame procesado aún');
+    this.renderCrossings();
     this.renderEvidenceStatus();
+  }
+
+  private renderCrossings(): void {
+    const root = this.root;
+    if (!root) return;
+    const total = this.localCrossings.aToB + this.localCrossings.bToA;
+    setText(root, '[data-crossings]', String(total));
+    if (!this.pilotPipeline) {
+      setText(root, '[data-crossings-detail]', 'requiere detector experimental activo');
+      return;
+    }
+    if (!this.countingGeometry) {
+      setText(root, '[data-crossings-detail]', 'sin geometría operacional · conteo deshabilitado');
+      return;
+    }
+    setText(
+      root,
+      '[data-crossings-detail]',
+      `A→B ${this.localCrossings.aToB} · B→A ${this.localCrossings.bToA} · revisión ${this.countingGeometry.revision} · sólo local`,
+    );
   }
 
   private async recordPilotEvidence(snapshot = this.runtime.snapshot()): Promise<void> {
