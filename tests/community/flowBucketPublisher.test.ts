@@ -37,6 +37,7 @@ function snapshot(): NodeRuntimeSnapshot {
     health: {
       sampleCount: 30,
       observedFps: 5,
+      inferenceFpsP50: 4.9,
       processingLatencyP95Ms: 180,
       droppedFrameRatio: 0.05,
       loadPressure: 'nominal',
@@ -76,22 +77,26 @@ function bucket(records = true): ClosedCommunityFlowBucket {
 
 function deliveryHarness() {
   const publicationKeys: string[] = [];
+  const releasedKeys: string[] = [];
   let flushes = 0;
   const delivery = {
     async enqueue(_draft: unknown, options?: { publicationKey?: string }) {
       publicationKeys.push(options?.publicationKey ?? '');
-      return {};
+      return { nodeId: 'node_publish01' };
+    },
+    async releasePublication(nodeId: string, publicationKey: string) {
+      releasedKeys.push(`${nodeId}|${publicationKey}`);
     },
     async flush() {
       flushes += 1;
       return { attempted: 0, delivered: 0, retryScheduled: 0, deadLettered: 0 };
     },
   } as unknown as CommunityDeliveryRuntime;
-  return { delivery, publicationKeys, flushes: () => flushes };
+  return { delivery, publicationKeys, releasedKeys, flushes: () => flushes };
 }
 
 describe('CommunityFlowBucketPublisher', () => {
-  it('enqueues a closed public bucket then commits its local reduced source', async () => {
+  it('enqueues a closed public bucket, commits its source and retires the reservation', async () => {
     const commits: number[] = [];
     const harness = deliveryHarness();
     const publisher = new CommunityFlowBucketPublisher({
@@ -112,6 +117,9 @@ describe('CommunityFlowBucketPublisher', () => {
     expect(commits).toEqual([1_788_000_000_000]);
     expect(harness.publicationKeys).toEqual([
       'flow-v2:line_main:1788000000000:1788000300000',
+    ]);
+    expect(harness.releasedKeys).toEqual([
+      'node_publish01|flow-v2:line_main:1788000000000:1788000300000',
     ]);
   });
 
@@ -140,6 +148,7 @@ describe('CommunityFlowBucketPublisher', () => {
     expect(second.enqueuedBuckets).toBe(1);
     expect(harness.publicationKeys).toHaveLength(2);
     expect(harness.publicationKeys[0]).toBe(harness.publicationKeys[1]);
+    expect(harness.releasedKeys).toHaveLength(1);
   });
 
   it('retains publishable buckets until detector metadata exists', async () => {
