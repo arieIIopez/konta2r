@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  countingGeometryStreamId,
   countingLineSideLabels,
   createCountingGeometryConfiguration,
   normalizedVideoPointToViewport,
+  operationalCountingLine,
   validateCountingGeometryConfiguration,
   videoCoverTransform,
   viewportPointToNormalizedVideo,
@@ -45,6 +47,40 @@ describe('counting geometry configuration', () => {
       publicBToA: 'RIGHT_TO_LEFT',
     });
     expect(() => validateCountingGeometryConfiguration(second)).not.toThrow();
+  });
+
+  it('creates a distinct operational stream for every saved revision without mutating editor geometry', () => {
+    const first = createCountingGeometryConfiguration({
+      line: {
+        id: 'line_primary',
+        a: { x: 0.2, y: 0.3 },
+        b: { x: 0.8, y: 0.7 },
+      },
+      frameWidth: 1920,
+      frameHeight: 1080,
+      nowEpochMs: 1_800_000_000_000,
+      createId: () => 'geometry_test123',
+    });
+    const second = createCountingGeometryConfiguration({
+      line: {
+        id: 'line_primary',
+        a: { x: 0.25, y: 0.35 },
+        b: { x: 0.75, y: 0.65 },
+      },
+      frameWidth: 1920,
+      frameHeight: 1080,
+      nowEpochMs: 1_800_000_100_000,
+      previous: first,
+    });
+
+    expect(countingGeometryStreamId(first)).toBe('geometry_test123_r1');
+    expect(countingGeometryStreamId(second)).toBe('geometry_test123_r2');
+    const operational = operationalCountingLine(second);
+    expect(operational.id).toBe('geometry_test123_r2');
+    expect(second.line.id).toBe('line_primary');
+
+    operational.a.x = 0.99;
+    expect(second.line.a.x).toBe(0.25);
   });
 
   it('rejects touch lines too short to be operationally meaningful', () => {
