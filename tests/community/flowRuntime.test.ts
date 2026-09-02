@@ -39,8 +39,8 @@ class FakePublisher implements CommunityFlowPublisherPort {
   }
 }
 
-function harness(initialNode: string | undefined = NODE_A) {
-  let nodeId: string | undefined = initialNode;
+function harness(initialNode: string | null = NODE_A) {
+  let nodeId: string | undefined = initialNode ?? undefined;
   const pendingByNode = new Map<string, string[]>();
   const created = new Map<string, FakePublisher[]>();
   const runtime = new BrowserCommunityFlowRuntime({
@@ -122,7 +122,7 @@ describe('BrowserCommunityFlowRuntime', () => {
   });
 
   it('does not recover or attribute flow when there is no active sensor node', async () => {
-    const h = harness(undefined);
+    const h = harness(null);
     h.pendingByNode.set(NODE_A, ['geometry_pending1_r1']);
     await h.runtime.setActiveStream('geometry_live001_r1');
     await h.runtime.observeFrame(frame, 5_000);
