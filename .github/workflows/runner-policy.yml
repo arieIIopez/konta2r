@@ -1,0 +1,36 @@
+name: Runner policy and patana smoke
+
+on:
+  push:
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check_runner_policy.py"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check_runner_policy.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: [self-hosted, linux, konta2r]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify runner policy
+        run: python3 scripts/check_runner_policy.py
+      - name: Verify physical host
+        run: |
+          echo "Runner name: $RUNNER_NAME"
+          echo "Machine name: $(hostname)"
+          echo "User: $(whoami)"
+          uname -a
+          test "$(hostname)" = "patana"
+
