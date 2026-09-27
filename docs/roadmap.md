@@ -117,6 +117,7 @@
 - [x] definir manifest y auditoría de cobertura del corpus Public Life (`docs/public-life-corpus.md`);
 - [x] definir esquema/protocolo de ground truth explícito para relaciones y episodios (`docs/public-life-annotation-protocol.md`);
 - [ ] generar ground truth de actividades/relaciones observables;
+- [x] implementar evaluador común A/B/C/D para frames y episodios (`docs/public-life-benchmark.md`);
 - [ ] benchmark A: reglas geométricas;
 - [ ] benchmark B: RelationProvider;
 - [ ] benchmark C: geometría + RelationProvider;
