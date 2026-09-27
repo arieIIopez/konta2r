@@ -2,7 +2,7 @@
   "schemaVersion": "1",
   "recordType": "relateanything_browser_runtime_smoke",
   "candidateId": "maelic/relsgg-vits16plus",
-  "executedAtIso": "2026-09-27T04:47:29.988Z",
+  "executedAtIso": "2026-09-27T04:48:39.717Z",
   "runner": {
     "nodeVersion": "v22.23.2",
     "platform": "linux",
@@ -12,7 +12,7 @@
   "wasm": {
     "backend": "wasm",
     "harnessCompleted": true,
-    "harnessDurationMs": 924,
+    "harnessDurationMs": 882,
     "browserVersion": "140.0.7339.16",
     "launchArgs": [
       "--disable-dev-shm-usage"
@@ -28,7 +28,7 @@
       },
       {
         "type": "error",
-        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
       }
     ],
     "pageErrors": [],
@@ -37,8 +37,8 @@
       "backend": "wasm",
       "attempted": true,
       "passed": false,
-      "startedAtIso": "2026-09-27T04:47:28.192Z",
-      "completedAtIso": "2026-09-27T04:47:29.025Z",
+      "startedAtIso": "2026-09-27T04:48:37.986Z",
+      "completedAtIso": "2026-09-27T04:48:38.778Z",
       "environment": {
         "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/140.0.7339.16 Safari/537.36",
         "crossOriginIsolated": false,
@@ -67,7 +67,7 @@
   "webgpu": {
     "backend": "webgpu",
     "harnessCompleted": true,
-    "harnessDurationMs": 751,
+    "harnessDurationMs": 706,
     "browserVersion": "140.0.7339.16",
     "launchArgs": [
       "--disable-dev-shm-usage",
@@ -85,7 +85,7 @@
       },
       {
         "type": "error",
-        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
       }
     ],
     "pageErrors": [],
@@ -94,8 +94,8 @@
       "backend": "webgpu",
       "attempted": true,
       "passed": false,
-      "startedAtIso": "2026-09-27T04:47:29.257Z",
-      "completedAtIso": "2026-09-27T04:47:29.948Z",
+      "startedAtIso": "2026-09-27T04:48:39.024Z",
+      "completedAtIso": "2026-09-27T04:48:39.654Z",
       "environment": {
         "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/140.0.7339.16 Safari/537.36",
         "crossOriginIsolated": false,
