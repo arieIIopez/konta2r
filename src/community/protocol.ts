@@ -26,7 +26,45 @@ export interface CommunitySpatialAggregate extends PublicSpatialAggregate {
   aggregateType: 'spatial';
 }
 
-export type CommunityAggregateRecord = PublicFlowAggregate | CommunitySpatialAggregate;
+export type PublicLifeActivityClass =
+  | 'seated_use'
+  | 'supported_stay'
+  | 'social_interaction'
+  | 'mobility_relation'
+  | 'spatial_context'
+  | 'other_observed_relation';
+
+export type PublicLifeElementClass =
+  | 'none'
+  | 'seating'
+  | 'edge_support'
+  | 'greenery'
+  | 'transit'
+  | 'stairs'
+  | 'frontage'
+  | 'play'
+  | 'cycle_parking'
+  | 'other'
+  | 'mixed';
+
+export interface PublicLifeAggregate {
+  schemaVersion: '2.0';
+  aggregateType: 'public_life';
+  bucketStartMs: number;
+  bucketEndMs: number;
+  activityClass: PublicLifeActivityClass;
+  elementClass: PublicLifeElementClass;
+  uniqueEntities: number;
+  episodeCount: number;
+  totalDurationSeconds: number;
+  participantTimeSeconds: number;
+  meanQuality: number;
+}
+
+export type CommunityAggregateRecord =
+  | PublicFlowAggregate
+  | CommunitySpatialAggregate
+  | PublicLifeAggregate;
 
 export function asCommunitySpatialAggregate(
   aggregate: PublicSpatialAggregate,
@@ -60,6 +98,8 @@ export interface CommunityUploadEnvelope {
 const FORBIDDEN_KEY_FRAGMENTS = [
   'trackid',
   'rendertrackid',
+  'episodeid',
+  'semanticelementid',
   'face',
   'plate',
   'licenseplate',
@@ -163,12 +203,28 @@ export function validateCommunityUpload(
       if (record.meanQuality !== clamp01(record.meanQuality)) {
         errors.push(`invalid_mean_quality:${index}`);
       }
-    } else {
+    } else if (record.aggregateType === 'spatial') {
       if (!Number.isInteger(record.uniqueEntities) || record.uniqueEntities < 0) {
         errors.push(`invalid_unique_entities:${index}`);
       }
       if (!(record.cellSizeMeters >= 2)) {
         errors.push(`public_cell_too_fine:${index}`);
+      }
+      if (record.meanQuality !== clamp01(record.meanQuality)) {
+        errors.push(`invalid_mean_quality:${index}`);
+      }
+    } else {
+      if (!Number.isInteger(record.uniqueEntities) || record.uniqueEntities < 3) {
+        errors.push(`public_life_unique_entities_below_privacy_floor:${index}`);
+      }
+      if (!Number.isInteger(record.episodeCount) || record.episodeCount < 3) {
+        errors.push(`public_life_episode_count_below_privacy_floor:${index}`);
+      }
+      if (!Number.isFinite(record.totalDurationSeconds) || record.totalDurationSeconds < 0) {
+        errors.push(`invalid_public_life_duration:${index}`);
+      }
+      if (!Number.isFinite(record.participantTimeSeconds) || record.participantTimeSeconds < 0) {
+        errors.push(`invalid_public_life_participant_time:${index}`);
       }
       if (record.meanQuality !== clamp01(record.meanQuality)) {
         errors.push(`invalid_mean_quality:${index}`);

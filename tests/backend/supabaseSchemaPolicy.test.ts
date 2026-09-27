@@ -8,7 +8,14 @@ describe('Supabase schema privacy policy', () => {
     expect(schemaSql).toContain('create table if not exists private.node_lifecycle_events');
     expect(schemaSql).toContain('create table if not exists private.community_batches');
     expect(schemaSql).toContain('create table if not exists private.flow_aggregates');
+    expect(schemaSql).toContain('create table if not exists private.public_life_aggregates');
     expect(schemaSql).toContain('revoke all on all tables in schema private from public, anon, authenticated');
+  });
+
+  it('enforces coarse Public Life privacy floors at the database boundary', () => {
+    expect(schemaSql).toContain('public_life_unique_entities_privacy_floor check (unique_entities >= 3)');
+    expect(schemaSql).toContain('public_life_episode_count_privacy_floor check (episode_count >= 3)');
+    expect(schemaSql).toContain("public_life_bucket_public_floor check (bucket_end - bucket_start >= interval '1 minute')");
   });
 
   it('requires RLS and explicit least-privilege grants on browser-reachable tables', () => {

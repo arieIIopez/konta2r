@@ -278,3 +278,67 @@ describe('node credential verifier', () => {
     await expect(verifier(base.nodeId, wrong)).resolves.toEqual({ authorized: false });
   });
 });
+
+describe('Public Life Community ingestion', () => {
+  it('parses a coarse Public Life aggregate with no local identifiers', () => {
+    const envelope = validEnvelope();
+    envelope.records = [{
+      schemaVersion: '2.0',
+      aggregateType: 'public_life',
+      bucketStartMs: NOW_MS - 600_000,
+      bucketEndMs: NOW_MS - 300_000,
+      activityClass: 'social_interaction',
+      elementClass: 'none',
+      uniqueEntities: 4,
+      episodeCount: 3,
+      totalDurationSeconds: 210,
+      participantTimeSeconds: 420,
+      meanQuality: 0.79,
+    }];
+
+    expect(parseCommunityUploadJson(JSON.stringify(envelope))).toEqual(envelope);
+  });
+
+  it('rejects a Public Life aggregate below the privacy floor at ingestion', () => {
+    const envelope = validEnvelope();
+    envelope.records = [{
+      schemaVersion: '2.0',
+      aggregateType: 'public_life',
+      bucketStartMs: NOW_MS - 600_000,
+      bucketEndMs: NOW_MS - 300_000,
+      activityClass: 'seated_use',
+      elementClass: 'seating',
+      uniqueEntities: 1,
+      episodeCount: 1,
+      totalDurationSeconds: 60,
+      participantTimeSeconds: 60,
+      meanQuality: 0.9,
+    }];
+
+    expect(() => parseCommunityUploadJson(JSON.stringify(envelope)))
+      .toThrow('unsafe_payload');
+  });
+
+  it('rejects local Public Life identifiers that accidentally cross the trust boundary', () => {
+    const envelope = validEnvelope() as CommunityUploadEnvelope & {
+      leakedEpisodeId?: string;
+    };
+    envelope.records = [{
+      schemaVersion: '2.0',
+      aggregateType: 'public_life',
+      bucketStartMs: NOW_MS - 600_000,
+      bucketEndMs: NOW_MS - 300_000,
+      activityClass: 'seated_use',
+      elementClass: 'seating',
+      uniqueEntities: 3,
+      episodeCount: 3,
+      totalDurationSeconds: 180,
+      participantTimeSeconds: 180,
+      meanQuality: 0.9,
+    }];
+    envelope.leakedEpisodeId = 'episode-local-123';
+
+    expect(() => parseCommunityUploadJson(JSON.stringify(envelope)))
+      .toThrow('invalid_payload_shape');
+  });
+});

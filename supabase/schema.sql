@@ -202,6 +202,57 @@ create table if not exists private.spatial_aggregates (
 create index if not exists spatial_aggregates_batch_idx on private.spatial_aggregates(batch_id);
 create index if not exists spatial_aggregates_bucket_idx on private.spatial_aggregates(bucket_start, entity_type);
 
+create table if not exists private.public_life_aggregates (
+  aggregate_id bigint generated always as identity primary key,
+  batch_id uuid not null references private.community_batches(batch_id) on delete cascade,
+  bucket_start timestamptz not null,
+  bucket_end timestamptz not null,
+  activity_class text not null,
+  element_class text not null,
+  unique_entities integer not null,
+  episode_count integer not null,
+  total_duration_seconds double precision not null,
+  participant_time_seconds double precision not null,
+  mean_quality double precision not null,
+  constraint public_life_bucket_order check (bucket_end > bucket_start),
+  constraint public_life_bucket_public_floor check (bucket_end - bucket_start >= interval '1 minute'),
+  constraint public_life_activity_class check (
+    activity_class in (
+      'seated_use',
+      'supported_stay',
+      'social_interaction',
+      'mobility_relation',
+      'spatial_context',
+      'other_observed_relation'
+    )
+  ),
+  constraint public_life_element_class check (
+    element_class in (
+      'none',
+      'seating',
+      'edge_support',
+      'greenery',
+      'transit',
+      'stairs',
+      'frontage',
+      'play',
+      'cycle_parking',
+      'other',
+      'mixed'
+    )
+  ),
+  constraint public_life_unique_entities_privacy_floor check (unique_entities >= 3),
+  constraint public_life_episode_count_privacy_floor check (episode_count >= 3),
+  constraint public_life_duration check (total_duration_seconds >= 0),
+  constraint public_life_participant_time check (participant_time_seconds >= 0),
+  constraint public_life_quality check (mean_quality between 0 and 1)
+);
+
+create index if not exists public_life_aggregates_batch_idx
+  on private.public_life_aggregates(batch_id);
+create index if not exists public_life_aggregates_bucket_idx
+  on private.public_life_aggregates(bucket_start, activity_class, element_class);
+
 alter table public.profiles enable row level security;
 alter table public.segments enable row level security;
 alter table public.nodes enable row level security;

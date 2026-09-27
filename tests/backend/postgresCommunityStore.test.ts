@@ -105,6 +105,19 @@ function envelope(): CommunityUploadEnvelope {
         meanSpeedMps: 1.3,
         meanQuality: 0.81,
       },
+      {
+        schemaVersion: '2.0',
+        aggregateType: 'public_life',
+        bucketStartMs: 1_788_000_000_000,
+        bucketEndMs: 1_788_000_300_000,
+        activityClass: 'seated_use',
+        elementClass: 'seating',
+        uniqueEntities: 4,
+        episodeCount: 4,
+        totalDurationSeconds: 360,
+        participantTimeSeconds: 420,
+        meanQuality: 0.84,
+      },
     ],
   };
 }
@@ -126,6 +139,7 @@ function queryKinds(db: FakeDatabase): string[] {
     if (sql.includes('select batch_id::text, payload_sha256')) return 'batch_select';
     if (sql.includes('insert into private.flow_aggregates')) return 'flow_insert';
     if (sql.includes('insert into private.spatial_aggregates')) return 'spatial_insert';
+    if (sql.includes('insert into private.public_life_aggregates')) return 'public_life_insert';
     if (sql.includes('update private.node_credentials')) return 'credential_touch';
     if (sql.includes('join private.node_credentials')) return 'credential_lookup';
     return 'other';
@@ -212,7 +226,7 @@ describe('transactional PostgreSQL Community store', () => {
     expect(db.committed).toBe(1);
     expect(db.rolledBack).toBe(0);
     expect(queryKinds(db)).toEqual([
-      'batch_insert', 'flow_insert', 'spatial_insert', 'credential_touch',
+      'batch_insert', 'flow_insert', 'spatial_insert', 'public_life_insert', 'credential_touch',
     ]);
 
     const flowJson = String(db.queries[1]?.params[1]);
@@ -237,6 +251,19 @@ describe('transactional PostgreSQL Community store', () => {
       sample_count: 17,
       mean_speed_mps: 1.3,
       mean_quality: 0.81,
+    }]);
+
+    const publicLifeJson = String(db.queries[3]?.params[1]);
+    expect(JSON.parse(publicLifeJson)).toEqual([{
+      bucket_start_ms: 1_788_000_000_000,
+      bucket_end_ms: 1_788_000_300_000,
+      activity_class: 'seated_use',
+      element_class: 'seating',
+      unique_entities: 4,
+      episode_count: 4,
+      total_duration_seconds: 360,
+      participant_time_seconds: 420,
+      mean_quality: 0.84,
     }]);
   });
 
