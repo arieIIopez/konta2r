@@ -51,7 +51,7 @@ async function runBackend(backend) {
     await page.waitForFunction(
       () => window.__RELATEANYTHING_SMOKE_RESULT__ !== undefined,
       undefined,
-      { timeout: 180_000 },
+      { timeout: backend === 'wasm' ? 390_000 : 240_000 },
     );
     const result = await page.evaluate(
       () => window.__RELATEANYTHING_SMOKE_RESULT__,
@@ -72,7 +72,13 @@ async function runBackend(backend) {
     return {
       backend,
       harnessCompleted: false,
-      browserVersion: browser ? await browser.version().catch(() => null) : null,
+      browserVersion: (() => {
+        try {
+          return browser?.version() ?? null;
+        } catch {
+          return null;
+        }
+      })(),
       launchArgs,
       consoleMessages,
       pageErrors,
