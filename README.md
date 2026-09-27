@@ -30,9 +30,34 @@ Flujo Community:
 
 🧪 **Konta2r v2 — alpha integrada.**
 
-En `develop` ya están implementados el runtime PWA, detector piloto ONNX/NanoDet, tracking multiobjeto, fusión modal, línea táctil versionada, conteos A→B/B→A, agregación Community privacy-first, outbox offline, lifecycle de nodos y Edge Functions Supabase.
+`main` es la **fuente de verdad del proyecto** y contiene la versión integrada de Konta2r. Allí están implementados el runtime PWA, detector piloto ONNX/NanoDet, tracking multiobjeto, fusión modal, línea táctil versionada, conteos A→B/B→A, agregación Community privacy-first, outbox offline, lifecycle de nodos y Edge Functions Supabase.
+
+El 26 de septiembre de 2026 se consolidó en `main` todo el desarrollo histórico que hasta entonces se había integrado en `develop`. Desde esa consolidación, `develop` queda deprecada y no debe utilizarse como base para nuevo trabajo.
 
 El siguiente gate externo es desplegar y verificar todo contra un **proyecto Supabase dedicado a Konta2r**. El código no debe desplegarse sobre proyectos Supabase ajenos o reutilizados para otros fines.
+
+## Flujo de desarrollo
+
+Konta2r utiliza un flujo **main-first / trunk-based**:
+
+```text
+main
+  ↑
+pull request
+  ↑
+feature/* | fix/* | experiment/* | evidence/*
+```
+
+Reglas:
+
+1. todo trabajo nuevo nace desde `main`;
+2. las ramas de trabajo son temporales y de alcance acotado;
+3. todo cambio vuelve a `main` mediante pull request;
+4. después del merge, la rama temporal puede eliminarse si no contiene evidencia que deba preservarse;
+5. `develop` no se usa para desarrollo nuevo;
+6. las ramas `evidence/*` sólo se conservan cuando cumplen una función explícita de reproducibilidad o trazabilidad.
+
+La política completa está en `docs/development-workflow.md`.
 
 ## Líneas de trabajo actuales
 
@@ -47,6 +72,7 @@ El siguiente gate externo es desplegar y verificar todo contra un **proyecto Sup
 ## Documentación clave
 
 - `docs/roadmap.md` — hoja de ruta auditada contra el repositorio;
+- `docs/development-workflow.md` — política de ramas y contribución main-first;
 - `docs/counting-geometry.md` — geometría táctil, revisiones y conteo local;
 - `docs/community-flow-runtime.md` — frontera de agregación Community;
 - `docs/community-node-provisioning.md` — enrolamiento, credencial sensor y recuperación;
@@ -54,7 +80,7 @@ El siguiente gate externo es desplegar y verificar todo contra un **proyecto Sup
 
 ## Validación técnica
 
-Cada cambio integrado a `develop` debe pasar:
+Cada cambio que se proponga integrar a `main` debe pasar:
 
 - TypeScript estricto;
 - chequeo Deno de las Edge Functions;
