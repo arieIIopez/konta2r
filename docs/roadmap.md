@@ -106,12 +106,13 @@
 
 - [x] definir marco metodológico inicial `docs/public-life-gehl.md`;
 - [x] separar conceptualmente observación automática e interpretación urbanística;
-- [ ] definir contratos `RelationProvider`, `RelationObservation` y `ActivityEpisode`;
-- [ ] implementar mapa semántico versionado de elementos estáticos del espacio público;
+- [x] definir contratos `RelationProvider`, `RelationObservation`, `RelationFrameState` y `ActivityEpisode`;
+- [x] implementar mapa semántico versionado de elementos estáticos del espacio público;
 - [ ] definir vocabulario Public Life mínimo y sus criterios de validación;
-- [ ] implementar candidate gate para no ejecutar relaciones sobre todos los pares/frames;
+- [x] implementar candidate gate espacial para no ejecutar relaciones sobre todos los pares;
+- [ ] implementar gate/sampling temporal para no ejecutar relaciones en todos los frames;
 - [ ] construir adapter experimental de RelateAnything;
-- [ ] incorporar persistencia temporal de relaciones y estado “no evaluable por oclusión”;
+- [x] incorporar persistencia temporal de relaciones y estado “no evaluable por oclusión”;
 - [ ] generar ground truth de actividades/relaciones observables;
 - [ ] benchmark A: reglas geométricas;
 - [ ] benchmark B: RelationProvider;
@@ -120,7 +121,7 @@
 - [ ] medir impacto sobre permanencia, uso de mobiliario e interacción probable;
 - [ ] definir agregados Public Life compatibles con privacidad Community.
 
-**Estado:** línea incorporada formalmente al producto. La hipótesis es que Konta2r puede medir no sólo desplazamiento, sino permanencia, actividad observable y relaciones persona–espacio/persona–persona manteniendo una cadena auditable desde pixels hasta el indicador urbanístico.
+**Estado:** la fundación ya dispone de contratos de relaciones, mapa semántico, gate espacial y persistencia temporal de episodios. Falta conectar estas piezas al pipeline, congelar vocabulario/corpus y ejecutar el benchmark antes de incorporar un modelo relacional.
 
 ---
 

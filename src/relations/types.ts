@@ -69,7 +69,9 @@ export type RelationEvaluability =
 
 export interface RelationFrameState {
   subjectId: string;
+  subjectKind: RelationEndpointKind;
   objectId: string;
+  objectKind: RelationEndpointKind;
   predicate: string;
   timestampMs: number;
   evaluability: RelationEvaluability;
