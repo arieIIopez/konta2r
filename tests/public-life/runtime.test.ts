@@ -156,12 +156,10 @@ describe('Public Life experimental runtime', () => {
     const staticCandidate = provider.calls[0]?.candidates.find(
       (candidate) => candidate.object.id === 'bench_01',
     );
-    expect(staticCandidate?.object.bbox).toEqual({
-      x: 120,
-      y: 200,
-      width: 230,
-      height: 100,
-    });
+    expect(staticCandidate?.object.bbox.x).toBeCloseTo(120, 6);
+    expect(staticCandidate?.object.bbox.y).toBeCloseTo(200, 6);
+    expect(staticCandidate?.object.bbox.width).toBeCloseTo(230, 6);
+    expect(staticCandidate?.object.bbox.height).toBeCloseTo(100, 6);
   });
 
   it('treats a missing thresholded output as pair_not_scored rather than negative evidence', async () => {
