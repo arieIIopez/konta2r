@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "1",
+  "recordType": "relateanything_browser_runtime_smoke",
+  "candidateId": "maelic/relsgg-vits16plus",
+  "executedAtIso": "2026-09-27T04:47:29.988Z",
+  "runner": {
+    "nodeVersion": "v22.23.2",
+    "platform": "linux",
+    "arch": "x64",
+    "baseUrl": "http://127.0.0.1:4174"
+  },
+  "wasm": {
+    "backend": "wasm",
+    "harnessCompleted": true,
+    "harnessDurationMs": 924,
+    "browserVersion": "140.0.7339.16",
+    "launchArgs": [
+      "--disable-dev-shm-usage"
+    ],
+    "consoleMessages": [
+      {
+        "type": "debug",
+        "text": "[vite] connecting..."
+      },
+      {
+        "type": "debug",
+        "text": "[vite] connected."
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      }
+    ],
+    "pageErrors": [],
+    "result": {
+      "schemaVersion": "1",
+      "backend": "wasm",
+      "attempted": true,
+      "passed": false,
+      "startedAtIso": "2026-09-27T04:47:28.192Z",
+      "completedAtIso": "2026-09-27T04:47:29.025Z",
+      "environment": {
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/140.0.7339.16 Safari/537.36",
+        "crossOriginIsolated": false,
+        "hardwareConcurrency": 4,
+        "deviceMemoryGiB": 8,
+        "navigatorGpuAvailable": true
+      },
+      "artifact": {
+        "modelBytes": 207881414,
+        "vocabularySize": 5,
+        "textDim": 512
+      },
+      "session": {
+        "creationMs": null,
+        "inferenceMs": null,
+        "inputNames": [],
+        "outputNames": []
+      },
+      "outputs": [],
+      "findings": [
+        "runtime_error:no available backend found. ERR: [wasm] TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.jsep.mjs?import"
+      ],
+      "error": "no available backend found. ERR: [wasm] TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.jsep.mjs?import"
+    }
+  },
+  "webgpu": {
+    "backend": "webgpu",
+    "harnessCompleted": true,
+    "harnessDurationMs": 751,
+    "browserVersion": "140.0.7339.16",
+    "launchArgs": [
+      "--disable-dev-shm-usage",
+      "--enable-unsafe-webgpu",
+      "--enable-features=Vulkan"
+    ],
+    "consoleMessages": [
+      {
+        "type": "debug",
+        "text": "[vite] connecting..."
+      },
+      {
+        "type": "debug",
+        "text": "[vite] connected."
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      }
+    ],
+    "pageErrors": [],
+    "result": {
+      "schemaVersion": "1",
+      "backend": "webgpu",
+      "attempted": true,
+      "passed": false,
+      "startedAtIso": "2026-09-27T04:47:29.257Z",
+      "completedAtIso": "2026-09-27T04:47:29.948Z",
+      "environment": {
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/140.0.7339.16 Safari/537.36",
+        "crossOriginIsolated": false,
+        "hardwareConcurrency": 4,
+        "deviceMemoryGiB": 8,
+        "navigatorGpuAvailable": true
+      },
+      "artifact": {
+        "modelBytes": 207881414,
+        "vocabularySize": 5,
+        "textDim": 512
+      },
+      "session": {
+        "creationMs": null,
+        "inferenceMs": null,
+        "inputNames": [],
+        "outputNames": []
+      },
+      "outputs": [],
+      "findings": [
+        "runtime_error:no available backend found. ERR: [webgpu] TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.asyncify.mjs?import"
+      ],
+      "error": "no available backend found. ERR: [webgpu] TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.asyncify.mjs?import"
+    }
+  },
+  "gates": {
+    "wasmRequired": true,
+    "wasmPassed": false,
+    "webgpuRequired": false,
+    "webgpuPassed": false,
+    "webgpuDiagnostic": "runtime_failed"
+  }
+}
