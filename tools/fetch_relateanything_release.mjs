@@ -84,7 +84,9 @@ async function main() {
       name,
       localPath: target,
       sourceUrl: url,
-      finalUrl: downloaded.finalUrl,
+      finalHost: (() => {
+        try { return new URL(downloaded.finalUrl).host; } catch { return null; }
+      })(),
       sha256: sha256(downloaded.bytes),
       sizeBytes: downloaded.bytes.byteLength,
       etag: downloaded.etag,
