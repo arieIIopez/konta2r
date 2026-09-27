@@ -123,7 +123,7 @@
 - [ ] benchmark C: geometría + RelationProvider;
 - [ ] benchmark D: geometría + RelationProvider + persistencia temporal;
 - [ ] medir impacto sobre permanencia, uso de mobiliario e interacción probable;
-- [ ] definir agregados Public Life compatibles con privacidad Community.
+- [x] definir agregados Public Life compatibles con privacidad Community (`docs/community-public-life.md`);
 
 **Estado:** la fundación ya dispone de contratos, mapa semántico, gate espacial, sampling temporal, adapter RelateAnything, persistencia de episodios y manifest de corpus. Falta poblar/validar el corpus, ejecutar runtime smoke real y conectar estas piezas al pipeline experimental antes de cualquier adopción operacional.
 
