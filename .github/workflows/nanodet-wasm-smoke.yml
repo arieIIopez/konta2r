@@ -2,27 +2,21 @@ name: nanodet-onnxruntime-web-wasm-smoke
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature/nanodet-wasm-smoke
-    paths:
-      - tools/smoke_nanodet_ort_web.mjs
-      - .github/workflows/nanodet-wasm-smoke.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   smoke:
     runs-on: [self-hosted, linux, konta2r]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout main
+        uses: actions/checkout@v6
         with:
-          ref: feature/nanodet-wasm-smoke
+          ref: main
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -32,14 +26,9 @@ jobs:
       - name: Execute exact checkpoint with ONNX Runtime Web WASM
         run: node tools/smoke_nanodet_ort_web.mjs
 
-      - name: Commit runtime smoke evidence
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add docs/benchmarks/evidence/nanodet-m-plus-1.5x-416-ort-web-wasm-smoke.json
-          if git diff --cached --quiet; then
-            echo "Runtime evidence unchanged"
-            exit 0
-          fi
-          git commit -m "evidence: record NanoDet ONNX Runtime Web WASM smoke"
-          git push
+      - name: Upload runtime smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanodet-ort-web-wasm-smoke
+          path: docs/benchmarks/evidence/nanodet-m-plus-1.5x-416-ort-web-wasm-smoke.json
+          if-no-files-found: error
