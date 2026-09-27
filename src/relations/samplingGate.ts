@@ -86,14 +86,14 @@ export const RELATION_SAMPLING_PROFILE_HINTS: Record<
 
 function finiteNonNegative(value: number, label: string): number {
   if (!Number.isFinite(value) || value < 0) {
-    throw new Error(\`\${label} must be finite and >= 0\`);
+    throw new Error(`${label} must be finite and >= 0`);
   }
   return value;
 }
 
 function positiveInteger(value: number, label: string): number {
   if (!Number.isInteger(value) || value < 1) {
-    throw new Error(\`\${label} must be an integer >= 1\`);
+    throw new Error(`${label} must be an integer >= 1`);
   }
   return value;
 }
@@ -111,11 +111,11 @@ function cloneCandidate(candidate: RelationCandidate): RelationCandidate {
 }
 
 function endpointKey(endpoint: RelationEndpoint): string {
-  return \`\${endpoint.kind}:\${endpoint.id}\`;
+  return `${endpoint.kind}:${endpoint.id}`;
 }
 
 export function relationCandidatePairKey(candidate: RelationCandidate): string {
-  return \`\${endpointKey(candidate.subject)}=>\${endpointKey(candidate.object)}\`;
+  return `${endpointKey(candidate.subject)}=>${endpointKey(candidate.object)}`;
 }
 
 function center(box: BoundingBox): { x: number; y: number } {
