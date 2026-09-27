@@ -88,6 +88,7 @@ La política completa está en `docs/development-workflow.md`.
 - `docs/public-life-gehl.md` — marco de observación de vida pública, relaciones, permanencia y evaluación de RelateAnything;
 - `docs/integrations/relateanything.md` — contrato ONNX, score, vocabulario dinámico, licencia y gates de la integración experimental;
 - `docs/public-life-corpus.md` — diseño del corpus, splits, ground truth y auditoría de cobertura Public Life;
+- `docs/public-life-annotation-protocol.md` — juicios explícitos positivo/negativo/incierto/no-observable y episodios de actividad;
 - `docs/community-flow-runtime.md` — frontera de agregación Community;
 - `docs/community-node-provisioning.md` — enrolamiento, credencial sensor y recuperación;
 - `docs/supabase-deployment.md` — runbook para el primer backend dedicado y E2E.
