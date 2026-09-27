@@ -120,6 +120,22 @@ describe('Public Life Community aggregation', () => {
     expect(result.records.map((record) => record.totalDurationSeconds)).toEqual([180, 180]);
   });
 
+  it('refuses configurations that lower the Community privacy floor', () => {
+    expect(() => aggregatePublicLifeForCommunity([
+      episode('e-1', 0, 60_000, ['a'], 'sitting on', ['bench-01']),
+    ], {
+      timestampToEpochMs: (value) => 1_800_000_000_000 + value,
+      minUniqueEntities: 2,
+    })).toThrow('minUniqueEntities must be an integer >= 3');
+
+    expect(() => aggregatePublicLifeForCommunity([
+      episode('e-1', 0, 60_000, ['a'], 'sitting on', ['bench-01']),
+    ], {
+      timestampToEpochMs: (value) => 1_800_000_000_000 + value,
+      minEpisodes: 1,
+    })).toThrow('minEpisodes must be an integer >= 3');
+  });
+
   it('ignores open and low-confidence episodes before aggregation', () => {
     const result = aggregatePublicLifeForCommunity([
       episode('open', 0, undefined, ['a'], 'sitting on', ['bench-01']),
