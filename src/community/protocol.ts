@@ -98,6 +98,8 @@ export interface CommunityUploadEnvelope {
 const FORBIDDEN_KEY_FRAGMENTS = [
   'trackid',
   'rendertrackid',
+  'episodeid',
+  'semanticelementid',
   'face',
   'plate',
   'licenseplate',
