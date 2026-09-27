@@ -92,7 +92,7 @@ jobs:
           name: relateanything-vits16plus-browser-smoke
           path: |
             docs/benchmarks/evidence/relateanything-vits16plus-browser-smoke.json
-            /tmp/relateanything-browser-vite.log
+            /tmp/relateanything-browser-static.log
           if-no-files-found: warn
 
       - name: Commit reproducible browser evidence to feature branch
@@ -115,12 +115,12 @@ jobs:
           git commit -m "evidence: record RelateAnything Chromium smoke"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
-      - name: Stop Vite harness
+      - name: Stop static browser harness
         if: always()
         shell: bash
         run: |
-          if [ -f /tmp/relateanything-browser-vite.pid ]; then
-            kill "$(cat /tmp/relateanything-browser-vite.pid)" 2>/dev/null || true
+          if [ -f /tmp/relateanything-browser-static.pid ]; then
+            kill "$(cat /tmp/relateanything-browser-static.pid)" 2>/dev/null || true
           fi
 
       - name: Enforce Chromium WASM gate
