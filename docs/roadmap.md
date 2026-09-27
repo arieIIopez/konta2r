@@ -111,7 +111,8 @@
 - [x] definir vocabulario Public Life mínimo y sus criterios de validación (`docs/public-life-vocabulary.md`);
 - [x] implementar candidate gate espacial para no ejecutar relaciones sobre todos los pares;
 - [ ] implementar gate/sampling temporal para no ejecutar relaciones en todos los frames;
-- [ ] construir adapter experimental de RelateAnything;
+- [x] construir adapter host-side experimental de RelateAnything con contrato ONNX publicado;
+- [ ] ejecutar runtime smoke real con artefacto + banco exactos y registrar evidencia;
 - [x] incorporar persistencia temporal de relaciones y estado “no evaluable por oclusión”;
 - [ ] generar ground truth de actividades/relaciones observables;
 - [ ] benchmark A: reglas geométricas;
