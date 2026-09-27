@@ -41,6 +41,7 @@ interface BrowserSmokeResult {
     min: number | null;
     max: number | null;
   }>;
+  stages: Array<{ name: string; elapsedMs: number }>;
   findings: string[];
   error: string | null;
 }
@@ -90,6 +91,27 @@ function outputSummary(name: string, value: {
   };
 }
 
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label}_timeout_after_${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 function makeBankTensors(
   ort: typeof import('onnxruntime-web'),
   bank: PredicateBankSubset,
@@ -122,6 +144,13 @@ async function execute(): Promise<BrowserSmokeResult> {
   const backend = params.get('backend') === 'webgpu' ? 'webgpu' : 'wasm';
   const startedAtIso = new Date().toISOString();
   const findings: string[] = [];
+  const stages: BrowserSmokeResult['stages'] = [];
+  const stageStartedAt = performance.now();
+  const stage = (name: string) => {
+    const elapsedMs = Math.max(0, performance.now() - stageStartedAt);
+    stages.push({ name, elapsedMs });
+    console.info(`relateanything_smoke_stage:${name}:${Math.round(elapsedMs)}ms`);
+  };
   const outputsSummary: BrowserSmokeResult['outputs'] = [];
   let modelBytes = 0;
   let vocabularySize = 0;
@@ -133,10 +162,12 @@ async function execute(): Promise<BrowserSmokeResult> {
   let error: string | null = null;
 
   try {
+    stage('start');
     const ort = backend === 'webgpu'
       ? await import('onnxruntime-web/webgpu')
       : await import('onnxruntime-web');
 
+    stage('ort_imported');
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
     ort.env.wasm.wasmPaths = '/ort/';
@@ -145,6 +176,7 @@ async function execute(): Promise<BrowserSmokeResult> {
       throw new Error('webgpu_unavailable:navigator.gpu is absent');
     }
 
+    stage('fetch_start');
     const [modelResponse, bankResponse] = await Promise.all([
       fetch('/relateanything-smoke/relateanything.onnx'),
       fetch('/relateanything-smoke/public-life-bank.json'),
@@ -158,15 +190,22 @@ async function execute(): Promise<BrowserSmokeResult> {
 
     const model = new Uint8Array(await modelResponse.arrayBuffer());
     const bank = await bankResponse.json() as PredicateBankSubset;
+    stage('artifacts_loaded');
     modelBytes = model.byteLength;
     vocabularySize = bank.names.length;
     textDim = bank.dim;
 
     const createStarted = performance.now();
-    const session = await ort.InferenceSession.create(model, {
-      executionProviders: [backend],
-    });
+    stage('session_create_start');
+    const session = await withTimeout(
+      ort.InferenceSession.create(model, {
+        executionProviders: [backend],
+      }),
+      backend === 'wasm' ? 240_000 : 120_000,
+      `${backend}_session_create`,
+    );
     creationMs = Math.max(0, performance.now() - createStarted);
+    stage('session_created');
 
     try {
       inputNames = [...session.inputNames];
@@ -210,8 +249,14 @@ async function execute(): Promise<BrowserSmokeResult> {
       }>;
       const inferenceStarted = performance.now();
       try {
-        outputs = await session.run(feeds) as typeof outputs;
+        stage('inference_start');
+        outputs = await withTimeout(
+          session.run(feeds) as Promise<typeof outputs>,
+          backend === 'wasm' ? 120_000 : 90_000,
+          `${backend}_inference`,
+        );
         inferenceMs = Math.max(0, performance.now() - inferenceStarted);
+        stage('inference_complete');
       } finally {
         Object.values(feeds).forEach((tensor) => tensor.dispose());
       }
@@ -267,6 +312,7 @@ async function execute(): Promise<BrowserSmokeResult> {
       outputNames,
     },
     outputs: outputsSummary,
+    stages,
     findings,
     error,
   };
