@@ -8,6 +8,8 @@ import {
   type CommunityNodeRuntimeSummary,
   type CommunityUploadEnvelope,
   type ObservedSegmentRef,
+  type PublicLifeActivityClass,
+  type PublicLifeElementClass,
 } from '../community/protocol';
 import type {
   NodeQualityDimension,
@@ -22,6 +24,27 @@ const ENTITY_TYPES: readonly EntityType[] = [
   'pedestrian', 'cyclist', 'skater', 'motorcyclist', 'car', 'bus', 'truck', 'pet', 'unknown',
 ];
 const DIRECTIONS: readonly CommunityDirection[] = ['A_TO_B', 'B_TO_A', 'UNSPECIFIED'];
+const PUBLIC_LIFE_ACTIVITY_CLASSES: readonly PublicLifeActivityClass[] = [
+  'seated_use',
+  'supported_stay',
+  'social_interaction',
+  'mobility_relation',
+  'spatial_context',
+  'other_observed_relation',
+];
+const PUBLIC_LIFE_ELEMENT_CLASSES: readonly PublicLifeElementClass[] = [
+  'none',
+  'seating',
+  'edge_support',
+  'greenery',
+  'transit',
+  'stairs',
+  'frontage',
+  'play',
+  'cycle_parking',
+  'other',
+  'mixed',
+];
 const SEGMENT_SOURCES: readonly ObservedSegmentRef['source'][] = ['osm', 'konta2r', 'municipal', 'other'];
 const RUNTIME_BACKENDS: readonly CommunityNodeRuntimeSummary['runtimeBackend'][] = [
   'webgpu', 'wasm', 'webnn', 'webgl', 'unknown',
@@ -318,6 +341,53 @@ function parseSpatialRecord(value: Record<string, unknown>): CommunityAggregateR
   };
 }
 
+function parsePublicLifeRecord(value: Record<string, unknown>): CommunityAggregateRecord | undefined {
+  if (!exactKeys(
+    value,
+    [
+      'schemaVersion', 'aggregateType', 'bucketStartMs', 'bucketEndMs',
+      'activityClass', 'elementClass', 'uniqueEntities', 'episodeCount',
+      'totalDurationSeconds', 'participantTimeSeconds', 'meanQuality',
+    ],
+    [
+      'schemaVersion', 'aggregateType', 'bucketStartMs', 'bucketEndMs',
+      'activityClass', 'elementClass', 'uniqueEntities', 'episodeCount',
+      'totalDurationSeconds', 'participantTimeSeconds', 'meanQuality',
+    ],
+  )) return undefined;
+  if (value.schemaVersion !== '2.0' || value.aggregateType !== 'public_life') return undefined;
+  const bucketStartMs = nonNegativeInteger(value.bucketStartMs);
+  const bucketEndMs = nonNegativeInteger(value.bucketEndMs);
+  const activityClass = oneOf(value.activityClass, PUBLIC_LIFE_ACTIVITY_CLASSES);
+  const elementClass = oneOf(value.elementClass, PUBLIC_LIFE_ELEMENT_CLASSES);
+  const uniqueEntities = nonNegativeInteger(value.uniqueEntities);
+  const episodeCount = nonNegativeInteger(value.episodeCount);
+  const totalDurationSeconds = finiteNumber(value.totalDurationSeconds);
+  const participantTimeSeconds = finiteNumber(value.participantTimeSeconds);
+  const meanQuality = finiteNumber(value.meanQuality);
+  if (
+    bucketStartMs === undefined || bucketEndMs === undefined
+    || activityClass === undefined || elementClass === undefined
+    || uniqueEntities === undefined || episodeCount === undefined
+    || totalDurationSeconds === undefined || totalDurationSeconds < 0
+    || participantTimeSeconds === undefined || participantTimeSeconds < 0
+    || meanQuality === undefined
+  ) return undefined;
+  return {
+    schemaVersion: '2.0',
+    aggregateType: 'public_life',
+    bucketStartMs,
+    bucketEndMs,
+    activityClass,
+    elementClass,
+    uniqueEntities,
+    episodeCount,
+    totalDurationSeconds,
+    participantTimeSeconds,
+    meanQuality,
+  };
+}
+
 function parseRecords(value: unknown): CommunityAggregateRecord[] | undefined {
   if (!Array.isArray(value) || value.length === 0 || value.length > 10_000) return undefined;
   const records: CommunityAggregateRecord[] = [];
@@ -327,7 +397,9 @@ function parseRecords(value: unknown): CommunityAggregateRecord[] | undefined {
       ? parseFlowRecord(item)
       : item.aggregateType === 'spatial'
         ? parseSpatialRecord(item)
-        : undefined;
+        : item.aggregateType === 'public_life'
+          ? parsePublicLifeRecord(item)
+          : undefined;
     if (parsed === undefined) return undefined;
     records.push(parsed);
   }
