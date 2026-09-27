@@ -18,6 +18,8 @@ La fuente de verdad del manifest está en:
 
 `src/public-life/corpusManifest.ts`
 
+El contenido de cada archivo de anotación se define en `docs/public-life-annotation-protocol.md`.
+
 ## Splits
 
 Se reutilizan:
