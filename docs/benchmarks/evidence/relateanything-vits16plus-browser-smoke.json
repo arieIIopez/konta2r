@@ -2,7 +2,7 @@
   "schemaVersion": "1",
   "recordType": "relateanything_browser_runtime_smoke",
   "candidateId": "maelic/relsgg-vits16plus",
-  "executedAtIso": "2026-09-27T04:50:08.064Z",
+  "executedAtIso": "2026-09-27T05:07:42.266Z",
   "runner": {
     "nodeVersion": "v22.23.2",
     "platform": "linux",
@@ -12,23 +12,43 @@
   "wasm": {
     "backend": "wasm",
     "harnessCompleted": true,
-    "harnessDurationMs": 801,
+    "harnessDurationMs": 10914,
     "browserVersion": "140.0.7339.16",
     "launchArgs": [
       "--disable-dev-shm-usage"
     ],
     "consoleMessages": [
       {
-        "type": "debug",
-        "text": "[vite] connecting..."
+        "type": "info",
+        "text": "relateanything_smoke_stage:start:0ms"
       },
       {
-        "type": "debug",
-        "text": "[vite] connected."
+        "type": "info",
+        "text": "relateanything_smoke_stage:ort_imported:39ms"
       },
       {
-        "type": "error",
-        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        "type": "info",
+        "text": "relateanything_smoke_stage:fetch_start:39ms"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:artifacts_loaded:525ms"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:session_create_start:525ms"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:session_created:5720ms"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:inference_start:5722ms"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:inference_complete:10816ms"
       }
     ],
     "pageErrors": [],
@@ -36,9 +56,9 @@
       "schemaVersion": "1",
       "backend": "wasm",
       "attempted": true,
-      "passed": false,
-      "startedAtIso": "2026-09-27T04:50:06.086Z",
-      "completedAtIso": "2026-09-27T04:50:06.816Z",
+      "passed": true,
+      "startedAtIso": "2026-09-27T05:05:54.496Z",
+      "completedAtIso": "2026-09-27T05:06:05.350Z",
       "environment": {
         "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/140.0.7339.16 Safari/537.36",
         "crossOriginIsolated": false,
@@ -52,22 +72,128 @@
         "textDim": 512
       },
       "session": {
-        "creationMs": null,
-        "inferenceMs": null,
-        "inputNames": [],
-        "outputNames": []
+        "creationMs": 5195.199999809265,
+        "inferenceMs": 5093.799999713898,
+        "inputNames": [
+          "image",
+          "boxes",
+          "box_counts",
+          "W",
+          "alpha"
+        ],
+        "outputNames": [
+          "pred_logits",
+          "pair_logits",
+          "sub_idx",
+          "obj_idx",
+          "valid_mask"
+        ]
       },
-      "outputs": [],
-      "findings": [
-        "runtime_error:no available backend found. ERR: [wasm] TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.jsep.mjs?import"
+      "outputs": [
+        {
+          "name": "pred_logits",
+          "type": "float32",
+          "shape": [
+            1,
+            128,
+            5
+          ],
+          "dataLength": 640,
+          "nonFiniteCount": 0,
+          "min": -4.670725345611572,
+          "max": 1.2223291397094727
+        },
+        {
+          "name": "pair_logits",
+          "type": "float32",
+          "shape": [
+            1,
+            128
+          ],
+          "dataLength": 128,
+          "nonFiniteCount": 0,
+          "min": -0.9492207169532776,
+          "max": -0.2889333665370941
+        },
+        {
+          "name": "sub_idx",
+          "type": "int64",
+          "shape": [
+            1,
+            128
+          ],
+          "dataLength": 128,
+          "nonFiniteCount": 0,
+          "min": 0,
+          "max": 3
+        },
+        {
+          "name": "obj_idx",
+          "type": "int64",
+          "shape": [
+            1,
+            128
+          ],
+          "dataLength": 128,
+          "nonFiniteCount": 0,
+          "min": 0,
+          "max": 31
+        },
+        {
+          "name": "valid_mask",
+          "type": "bool",
+          "shape": [
+            1,
+            128
+          ],
+          "dataLength": 128,
+          "nonFiniteCount": 0,
+          "min": 0,
+          "max": 1
+        }
       ],
-      "error": "no available backend found. ERR: [wasm] TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.jsep.mjs?import"
+      "stages": [
+        {
+          "name": "start",
+          "elapsedMs": 0
+        },
+        {
+          "name": "ort_imported",
+          "elapsedMs": 39.09999990463257
+        },
+        {
+          "name": "fetch_start",
+          "elapsedMs": 39.19999980926514
+        },
+        {
+          "name": "artifacts_loaded",
+          "elapsedMs": 524.8999996185303
+        },
+        {
+          "name": "session_create_start",
+          "elapsedMs": 525.0999999046326
+        },
+        {
+          "name": "session_created",
+          "elapsedMs": 5720.299999713898
+        },
+        {
+          "name": "inference_start",
+          "elapsedMs": 5722
+        },
+        {
+          "name": "inference_complete",
+          "elapsedMs": 10815.799999713898
+        }
+      ],
+      "findings": [],
+      "error": null
     }
   },
   "webgpu": {
     "backend": "webgpu",
     "harnessCompleted": true,
-    "harnessDurationMs": 963,
+    "harnessDurationMs": 96517,
     "browserVersion": "140.0.7339.16",
     "launchArgs": [
       "--disable-dev-shm-usage",
@@ -76,16 +202,48 @@
     ],
     "consoleMessages": [
       {
-        "type": "debug",
-        "text": "[vite] connecting..."
+        "type": "info",
+        "text": "relateanything_smoke_stage:start:0ms"
       },
       {
-        "type": "debug",
-        "text": "[vite] connected."
+        "type": "info",
+        "text": "relateanything_smoke_stage:ort_imported:29ms"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:fetch_start:29ms"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:artifacts_loaded:691ms"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:session_create_start:691ms"
+      },
+      {
+        "type": "info",
+        "text": "WebGPU is experimental on this platform. See https://github.com/gpuweb/gpuweb/wiki/Implementation-Status#implementation-status"
+      },
+      {
+        "type": "info",
+        "text": "WebGPU is experimental on this platform. See https://github.com/gpuweb/gpuweb/wiki/Implementation-Status#implementation-status"
       },
       {
         "type": "error",
-        "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        "text": "\u001b[0;93m2026-09-27 02:06:09.887600 [W:onnxruntime:, session_state.cc:1398 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.\u001b[m"
+      },
+      {
+        "type": "error",
+        "text": "\u001b[0;93m2026-09-27 02:06:09.890100 [W:onnxruntime:, session_state.cc:1400 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.\u001b[m"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:session_created:6416ms"
+      },
+      {
+        "type": "info",
+        "text": "relateanything_smoke_stage:inference_start:6418ms"
       }
     ],
     "pageErrors": [],
@@ -94,8 +252,8 @@
       "backend": "webgpu",
       "attempted": true,
       "passed": false,
-      "startedAtIso": "2026-09-27T04:50:07.133Z",
-      "completedAtIso": "2026-09-27T04:50:07.999Z",
+      "startedAtIso": "2026-09-27T05:06:05.688Z",
+      "completedAtIso": "2026-09-27T05:07:42.162Z",
       "environment": {
         "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/140.0.7339.16 Safari/537.36",
         "crossOriginIsolated": false,
@@ -109,21 +267,63 @@
         "textDim": 512
       },
       "session": {
-        "creationMs": null,
+        "creationMs": 5725.299999713898,
         "inferenceMs": null,
-        "inputNames": [],
-        "outputNames": []
+        "inputNames": [
+          "image",
+          "boxes",
+          "box_counts",
+          "W",
+          "alpha"
+        ],
+        "outputNames": [
+          "pred_logits",
+          "pair_logits",
+          "sub_idx",
+          "obj_idx",
+          "valid_mask"
+        ]
       },
       "outputs": [],
-      "findings": [
-        "runtime_error:no available backend found. ERR: [webgpu] TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.asyncify.mjs?import"
+      "stages": [
+        {
+          "name": "start",
+          "elapsedMs": 0
+        },
+        {
+          "name": "ort_imported",
+          "elapsedMs": 28.5
+        },
+        {
+          "name": "fetch_start",
+          "elapsedMs": 28.90000009536743
+        },
+        {
+          "name": "artifacts_loaded",
+          "elapsedMs": 690.7000002861023
+        },
+        {
+          "name": "session_create_start",
+          "elapsedMs": 690.8000001907349
+        },
+        {
+          "name": "session_created",
+          "elapsedMs": 6416.099999904633
+        },
+        {
+          "name": "inference_start",
+          "elapsedMs": 6417.900000095367
+        }
       ],
-      "error": "no available backend found. ERR: [webgpu] TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.asyncify.mjs?import"
+      "findings": [
+        "runtime_error:webgpu_inference_timeout_after_90000ms"
+      ],
+      "error": "webgpu_inference_timeout_after_90000ms"
     }
   },
   "gates": {
     "wasmRequired": true,
-    "wasmPassed": false,
+    "wasmPassed": true,
     "webgpuRequired": false,
     "webgpuPassed": false,
     "webgpuDiagnostic": "runtime_failed"
