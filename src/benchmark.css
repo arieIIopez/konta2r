@@ -1,0 +1,76 @@
+.benchmark-shell { max-width: 1180px; margin: 0 auto; }
+.benchmark-body { padding: 0 12px 18px; }
+.benchmark-input-grid { display: grid; grid-template-columns: 1fr; gap: 9px; margin-bottom: 12px; }
+.benchmark-file-card {
+  display: grid; gap: 5px; min-width: 0; padding: 12px; border-radius: 14px;
+  border: 1px dashed rgba(148, 163, 184, .28); background: rgba(15, 23, 42, .48);
+  cursor: pointer; transition: border-color .15s ease, background .15s ease;
+}
+.benchmark-file-card:hover { border-color: rgba(94, 234, 212, .38); }
+.benchmark-file-card.loaded { border-style: solid; border-color: rgba(52, 211, 153, .24); background: rgba(6, 78, 59, .11); }
+.benchmark-file-card > span { color: #94a3b8; font-size: .66rem; text-transform: uppercase; letter-spacing: .055em; }
+.benchmark-file-card > strong { color: #e2e8f0; font-size: .82rem; overflow-wrap: anywhere; }
+.benchmark-file-card > small { color: #94a3b8; font-size: .69rem; line-height: 1.4; overflow-wrap: anywhere; }
+.benchmark-file-card input { width: 100%; margin-top: 4px; color: #cbd5e1; font-size: .7rem; }
+.benchmark-file-card input::file-selector-button {
+  margin-right: 8px; border: 1px solid rgba(148, 163, 184, .18); border-radius: 9px;
+  padding: 7px 9px; background: #1e293b; color: #e2e8f0; cursor: pointer;
+}
+
+.benchmark-controls {
+  display: grid; grid-template-columns: 1fr; gap: 9px; margin: 0 0 12px;
+}
+.benchmark-controls label, .benchmark-fixed {
+  display: grid; gap: 5px; padding: 10px 11px; border-radius: 13px;
+  border: 1px solid rgba(148, 163, 184, .1); background: rgba(30, 41, 59, .52);
+}
+.benchmark-controls span, .benchmark-fixed span { color: #94a3b8; font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; }
+.benchmark-controls select, .benchmark-controls input {
+  min-height: 40px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, .18);
+  background: #0f172a; color: #e2e8f0; padding: 0 10px;
+}
+.benchmark-fixed strong { font-size: .92rem; }
+.benchmark-fixed small { color: #94a3b8; font-size: .66rem; }
+.benchmark-actions { padding-left: 0; padding-right: 0; }
+
+.benchmark-verification, .benchmark-progress, .benchmark-findings {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 13px; font-size: .72rem; line-height: 1.48;
+  overflow-wrap: anywhere;
+}
+.benchmark-verification { display: grid; gap: 5px; }
+.benchmark-verification strong { text-transform: uppercase; letter-spacing: .04em; }
+.benchmark-verification span { color: #94a3b8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.benchmark-verification p { margin: 0; }
+.verification-verified { color: #d1fae5; background: rgba(6, 78, 59, .2); border: 1px solid rgba(52, 211, 153, .22); }
+.verification-incomplete { color: #fde68a; background: rgba(120, 53, 15, .16); border: 1px solid rgba(251, 191, 36, .2); }
+.verification-rejected { color: #fecaca; background: rgba(127, 29, 29, .18); border: 1px solid rgba(248, 113, 113, .22); }
+.benchmark-progress { color: #dbeafe; background: rgba(30, 64, 175, .12); border: 1px solid rgba(96, 165, 250, .18); }
+.benchmark-video { display: block; width: min(100%, 720px); max-height: 320px; margin: 0 0 12px; border-radius: 13px; background: #020617; }
+
+.benchmark-result { display: grid; gap: 12px; margin-top: 12px; padding: 12px; border-radius: 16px; border: 1px solid rgba(148, 163, 184, .14); background: rgba(2, 6, 23, .42); }
+.benchmark-result.validity-valid { border-color: rgba(52, 211, 153, .26); }
+.benchmark-result.validity-provisional { border-color: rgba(251, 191, 36, .26); }
+.benchmark-result.validity-invalid { border-color: rgba(248, 113, 113, .3); }
+.benchmark-result-head, .benchmark-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.benchmark-result-head > div, .benchmark-metrics > div {
+  min-width: 0; padding: 10px; border-radius: 12px; background: rgba(30, 41, 59, .58);
+}
+.benchmark-result-head span, .benchmark-metrics span { display: block; color: #94a3b8; font-size: .63rem; text-transform: uppercase; letter-spacing: .045em; }
+.benchmark-result-head strong, .benchmark-metrics strong { display: block; margin-top: 4px; font-size: .86rem; overflow-wrap: anywhere; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.benchmark-findings { margin: 0; color: #cbd5e1; background: rgba(15, 23, 42, .52); border: 1px solid rgba(148, 163, 184, .1); }
+.benchmark-findings p { margin: 0 0 6px; }
+.benchmark-findings p:last-child { margin-bottom: 0; }
+.benchmark-class-table { overflow-x: auto; border-radius: 12px; border: 1px solid rgba(148, 163, 184, .1); }
+.benchmark-class-table table { width: 100%; border-collapse: collapse; min-width: 620px; font-size: .7rem; }
+.benchmark-class-table th, .benchmark-class-table td { padding: 8px 9px; text-align: right; border-bottom: 1px solid rgba(148, 163, 184, .08); }
+.benchmark-class-table th:first-child, .benchmark-class-table td:first-child { text-align: left; }
+.benchmark-class-table th { color: #94a3b8; font-weight: 700; background: rgba(15, 23, 42, .72); }
+.benchmark-class-table tr:last-child td { border-bottom: 0; }
+
+@media (min-width: 760px) {
+  .benchmark-input-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .benchmark-controls { grid-template-columns: 1.3fr .7fr .8fr; }
+  .benchmark-result-head { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .benchmark-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

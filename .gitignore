@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.vite/
+coverage/
+*.log
+.DS_Store
+
+# Local/browser/runtime configuration. Commit examples only.
+.env
+.env.*
+!.env.example
+!supabase/functions/.env.example
+
+# Supabase CLI local state and generated temp files.
+supabase/.temp/
+supabase/.branches/

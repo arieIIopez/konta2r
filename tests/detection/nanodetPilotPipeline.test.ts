@@ -1,0 +1,192 @@
+import { describe, expect, it } from 'vitest';
+import type { Detector, DetectorInitialization, DetectorInput, DetectorOutput } from '../../src/detection/types';
+import { NanoDetPilotPipeline } from '../../src/detection/nanodetPilotPipeline';
+import type { NanoDetPilotLoadResult } from '../../src/detection/onnx/nanodetPilot';
+
+class FakeDetector implements Detector {
+  initializeCalls = 0;
+  detectCalls = 0;
+  disposeCalls = 0;
+
+  constructor(private readonly initializeError?: Error) {}
+
+  private readonly initialization: DetectorInitialization = {
+    model: {
+      adapterId: 'nanodet_plus_gfl',
+      modelId: 'opencv-nanodet-m-plus-1.5x-416-2022nov',
+      modelVersion: 'sha256-test',
+      modelSha256: 'a'.repeat(64),
+      weightsRedistributionVerified: false,
+      inputWidth: 416,
+      inputHeight: 416,
+      classNames: ['person', 'bicycle', 'car'],
+    },
+    runtime: {
+      runtime: 'onnxruntime-web',
+      runtimeVersion: '1.29.0',
+      backend: 'wasm',
+      executionProviders: ['wasm'],
+    },
+  };
+
+  async initialize(): Promise<DetectorInitialization> {
+    this.initializeCalls += 1;
+    if (this.initializeError) throw this.initializeError;
+    return this.initialization;
+  }
+
+  async detect(input: DetectorInput): Promise<DetectorOutput> {
+    this.detectCalls += 1;
+    return {
+      detections: [{
+        classId: 0,
+        className: 'person',
+        confidence: 0.9,
+        bbox: { x: 10, y: 10, width: 30, height: 70 },
+      }],
+      timestampMs: input.timestampMs,
+      telemetry: {
+        preprocessMs: 5,
+        inferenceMs: 20,
+        postprocessMs: 4,
+        totalMs: 29,
+        detectionCountBeforeFiltering: 1,
+        detectionCount: 1,
+      },
+    };
+  }
+
+  async dispose(): Promise<void> {
+    this.disposeCalls += 1;
+  }
+
+  getInitialization(): DetectorInitialization | null {
+    return this.initializeCalls > 0 && !this.initializeError ? this.initialization : null;
+  }
+}
+
+function loaded(detector: Detector): NanoDetPilotLoadResult {
+  return {
+    detector,
+    candidateId: 'opencv-nanodet-m-plus-1.5x-416-2022nov',
+    modelSha256: 'a'.repeat(64),
+    artifactSource: 'cache',
+    cachePersisted: true,
+    redistributionVerified: false,
+  };
+}
+
+describe('NanoDetPilotPipeline', () => {
+  it('does not load the external candidate until initialization is requested', async () => {
+    const detector = new FakeDetector();
+    let loaderCalls = 0;
+    const pipeline = new NanoDetPilotPipeline({
+      sessionId: 'session_test',
+      loader: async () => {
+        loaderCalls += 1;
+        return loaded(detector);
+      },
+    });
+
+    expect(loaderCalls).toBe(0);
+    expect(pipeline.snapshot()).toEqual({
+      state: 'idle',
+      displayName: 'NanoDet piloto',
+    });
+
+    const initialization = await pipeline.initialize();
+    expect(loaderCalls).toBe(1);
+    expect(detector.initializeCalls).toBe(1);
+    expect(initialization.runtime.backend).toBe('wasm');
+    expect(pipeline.snapshot()).toMatchObject({
+      state: 'ready',
+      displayName: 'NanoDet piloto',
+      artifactSource: 'cache',
+      cachePersisted: true,
+      backend: 'wasm',
+    });
+
+    await pipeline.dispose();
+    expect(detector.disposeCalls).toBe(1);
+    expect(pipeline.snapshot()).toEqual({
+      state: 'disposed',
+      displayName: 'NanoDet piloto',
+    });
+  });
+
+  it('processes semantic frames locally without inventing a counting line', async () => {
+    const detector = new FakeDetector();
+    const pipeline = new NanoDetPilotPipeline({
+      sessionId: 'session_test',
+      loader: async () => loaded(detector),
+    });
+
+    const frame = await pipeline.process({
+      source: {} as CanvasImageSource,
+      sourceWidth: 640,
+      sourceHeight: 360,
+      timestampMs: 1_788_000_000_000,
+    });
+
+    expect(detector.detectCalls).toBe(1);
+    expect(frame.detector.detections).toHaveLength(1);
+    expect(frame.fusion.entities).toHaveLength(1);
+    expect(frame.crossings).toEqual([]);
+    await pipeline.dispose();
+  });
+
+  it('cleans a partially initialized detector and retries successfully in the same pipeline instance', async () => {
+    const failingDetector = new FakeDetector(new Error('pilot runtime initialization failed'));
+    const healthyDetector = new FakeDetector();
+    let loaderCalls = 0;
+    const pipeline = new NanoDetPilotPipeline({
+      sessionId: 'session_retry',
+      loader: async () => {
+        loaderCalls += 1;
+        return loaded(loaderCalls === 1 ? failingDetector : healthyDetector);
+      },
+    });
+
+    await expect(pipeline.initialize()).rejects.toThrow('pilot runtime initialization failed');
+    expect(failingDetector.disposeCalls).toBe(1);
+    expect(pipeline.snapshot()).toEqual({
+      state: 'error',
+      displayName: 'NanoDet piloto',
+      error: 'pilot runtime initialization failed',
+    });
+
+    const initialization = await pipeline.initialize();
+    expect(loaderCalls).toBe(2);
+    expect(healthyDetector.initializeCalls).toBe(1);
+    expect(initialization.runtime.backend).toBe('wasm');
+    expect(pipeline.snapshot().state).toBe('ready');
+
+    await pipeline.dispose();
+    expect(healthyDetector.disposeCalls).toBe(1);
+  });
+
+  it('records loader failures and can retry a transient download failure in the same instance', async () => {
+    const detector = new FakeDetector();
+    let loaderCalls = 0;
+    const pipeline = new NanoDetPilotPipeline({
+      loader: async () => {
+        loaderCalls += 1;
+        if (loaderCalls === 1) throw new Error('pilot download failed');
+        return loaded(detector);
+      },
+    });
+
+    await expect(pipeline.initialize()).rejects.toThrow('pilot download failed');
+    expect(pipeline.snapshot()).toEqual({
+      state: 'error',
+      displayName: 'NanoDet piloto',
+      error: 'pilot download failed',
+    });
+
+    await expect(pipeline.initialize()).resolves.toMatchObject({
+      runtime: { backend: 'wasm' },
+    });
+    expect(loaderCalls).toBe(2);
+    await pipeline.dispose();
+  });
+});

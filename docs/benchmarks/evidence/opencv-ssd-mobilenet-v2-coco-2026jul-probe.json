@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "1",
+  "recordType": "onnx_candidate_probe_diagnostic",
+  "probe": {
+    "schemaVersion": "1.0",
+    "recordType": "onnx_model_probe",
+    "candidateId": "opencv-ssd-mobilenet-v2-coco-2026jul",
+    "candidateDisplayName": "SSD MobileNet V2 COCO — OpenCV contribution 2026-07",
+    "artifact": {
+      "sourceUrl": "https://huggingface.co/opencv/opencv_contribution/resolve/main/ssd_mobilenet_v2_coco_2018_03_29/ssd_mobilenet_v2_coco_2018_03_29_2026jul.onnx",
+      "sha256": "7ba2fdaa87b8cbbb52c16b5c6e31a7452c00e8ad68aec580bfb7b07f5b212619",
+      "sizeBytes": 69584537,
+      "declaredLicense": "Apache-2.0",
+      "redistributionVerified": false
+    },
+    "probedAtIso": "2026-08-31T13:09:48.402Z",
+    "runtime": {
+      "runtime": "onnxruntime-web",
+      "runtimeVersion": "1.29.0",
+      "backend": "wasm",
+      "executionProviders": ["wasm"]
+    },
+    "webgpuAttempted": false,
+    "inputs": [
+      {
+        "name": "image_tensor:0",
+        "kind": "tensor",
+        "type": "uint8",
+        "shape": ["unk__14471", "unk__14472", "unk__14473", 3]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "detection_boxes:0",
+        "kind": "tensor",
+        "type": "float32",
+        "shape": ["unk__14474", "unk__14475", 4]
+      },
+      {
+        "name": "detection_scores:0",
+        "kind": "tensor",
+        "type": "float32",
+        "shape": ["unk__14476", "unk__14477"]
+      },
+      {
+        "name": "detection_classes:0",
+        "kind": "tensor",
+        "type": "float32",
+        "shape": ["unk__14478", "unk__14479"]
+      },
+      {
+        "name": "num_detections:0",
+        "kind": "tensor",
+        "type": "float32",
+        "shape": ["unk__14480"]
+      }
+    ],
+    "metadataCompleteness": "complete",
+    "inputHintAssessment": {
+      "expectedWidth": 300,
+      "expectedHeight": 300,
+      "expectedLayout": "NHWC",
+      "observedShape": ["unk__14471", "unk__14472", "unk__14473", 3]
+    },
+    "runtimeSmoke": {
+      "schemaVersion": "1",
+      "attempted": true,
+      "passed": true,
+      "input": {
+        "name": "image_tensor:0",
+        "type": "uint8",
+        "shape": [1, 300, 300, 3]
+      },
+      "outputs": [
+        {
+          "name": "detection_boxes:0",
+          "type": "float32",
+          "shape": [1, 100, 4],
+          "dataLength": 400
+        },
+        {
+          "name": "detection_scores:0",
+          "type": "float32",
+          "shape": [1, 100],
+          "dataLength": 100
+        },
+        {
+          "name": "detection_classes:0",
+          "type": "float32",
+          "shape": [1, 100],
+          "dataLength": 100
+        },
+        {
+          "name": "num_detections:0",
+          "type": "float32",
+          "shape": [1],
+          "dataLength": 1
+        }
+      ],
+      "findings": []
+    }
+  },
+  "codecCompatibility": {
+    "schemaVersion": "1",
+    "candidateId": "opencv-ssd-mobilenet-v2-coco-2026jul",
+    "codecId": "ssd_tf_object_detection",
+    "status": "compatible",
+    "errors": [],
+    "warnings": [
+      "scores_classes_shapes_differ",
+      "input_shape_symbolic_validated_by_runtime_smoke"
+    ]
+  }
+}

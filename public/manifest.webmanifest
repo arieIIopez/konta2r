@@ -1,0 +1,19 @@
+{
+  "name": "Konta2r Node",
+  "short_name": "Konta2r",
+  "description": "Nodo local y comunitario de observación anónima de movilidad",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "lang": "es-CL",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
