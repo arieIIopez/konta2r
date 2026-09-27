@@ -78,12 +78,15 @@ jobs:
           echo "$!" >/tmp/relateanything-browser-static.pid
           for attempt in $(seq 1 60); do
             if curl --fail --silent "http://127.0.0.1:4174/?backend=wasm" >/dev/null; then
-              exit 0
+              break
             fi
             sleep 1
           done
-          cat /tmp/relateanything-browser-static.log
-          exit 1
+          curl --fail --silent "http://127.0.0.1:4174/?backend=wasm" >/dev/null
+          curl --fail --silent "http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.jsep.mjs" >/dev/null
+          curl --fail --silent "http://127.0.0.1:4174/ort/ort-wasm-simd-threaded.jsep.wasm" >/dev/null
+          curl --fail --silent "http://127.0.0.1:4174/relateanything-smoke/public-life-bank.json" >/dev/null
+          test "$(curl --silent --range 0-0 "http://127.0.0.1:4174/relateanything-smoke/relateanything.onnx" | wc -c)" -ge 1
 
       - name: Execute Chromium WASM and WebGPU smoke
         id: browser_smoke
