@@ -87,6 +87,7 @@ La política completa está en `docs/development-workflow.md`.
 - `docs/counting-geometry.md` — geometría táctil, revisiones y conteo local;
 - `docs/public-life-gehl.md` — marco de observación de vida pública, relaciones, permanencia y evaluación de RelateAnything;
 - `docs/integrations/relateanything.md` — contrato ONNX, score, vocabulario dinámico, licencia y gates de la integración experimental;
+- `docs/integrations/relateanything-runtime-smoke.md` — evidencia reproducible del release vits16plus ejecutado con ONNX Runtime Web/WASM;
 - `docs/public-life-corpus.md` — diseño del corpus, splits, ground truth y auditoría de cobertura Public Life;
 - `docs/public-life-annotation-protocol.md` — juicios explícitos positivo/negativo/incierto/no-observable y episodios de actividad;
 - `docs/public-life-benchmark.md` — métricas comunes A/B/C/D para relaciones y episodios Public Life;
