@@ -1,0 +1,91 @@
+name: relateanything-onnxruntime-web-wasm-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/relateanything-runtime-smoke
+    paths:
+      - "tools/fetch_relateanything_release.mjs"
+      - "tools/extract_relateanything_bank.py"
+      - "tools/smoke_relateanything_ort_web.mjs"
+      - ".github/workflows/relateanything-wasm-smoke.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, konta2r]
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install exact bank extraction dependency
+        run: python -m pip install --disable-pip-version-check "numpy==2.3.3"
+
+      - name: Fetch exact upstream release artifacts
+        run: |
+          node tools/fetch_relateanything_release.mjs             maelic/relsgg-vits16             .cache/relateanything/relsgg-vits16
+
+      - name: Extract exact Public Life predicate subset
+        run: |
+          python tools/extract_relateanything_bank.py             --bank .cache/relateanything/relsgg-vits16/predicate_bank.npz             --output .cache/relateanything/relsgg-vits16/public-life-bank.json             --predicates               "sitting on"               "leaning against"               "talking to"               "riding"               "holding"
+
+      - name: Execute exact graph with ONNX Runtime Web WASM
+        id: runtime_smoke
+        continue-on-error: true
+        run: |
+          node tools/smoke_relateanything_ort_web.mjs             .cache/relateanything/relsgg-vits16/relateanything.onnx             .cache/relateanything/relsgg-vits16/public-life-bank.json             .cache/relateanything/relsgg-vits16/thresholds.json             .cache/relateanything/relsgg-vits16/calibration.json             .cache/relateanything/relsgg-vits16/release-fetch.json             docs/benchmarks/evidence/relateanything-vits16-ort-web-wasm-smoke.json
+
+      - name: Upload runtime smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relateanything-vits16-ort-web-wasm-smoke
+          path: |
+            docs/benchmarks/evidence/relateanything-vits16-ort-web-wasm-smoke.json
+            .cache/relateanything/relsgg-vits16/release-fetch.json
+          if-no-files-found: warn
+
+      - name: Commit reproducible evidence to feature branch
+        if: always() && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="docs/benchmarks/evidence/relateanything-vits16-ort-web-wasm-smoke.json"
+          if [ ! -f "$evidence" ]; then
+            echo "No evidence file was produced."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$evidence"
+          if git diff --cached --quiet; then
+            echo "Evidence unchanged."
+            exit 0
+          fi
+          git commit -m "evidence: record RelateAnything ORT Web WASM smoke"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Enforce runtime smoke result
+        if: steps.runtime_smoke.outcome == 'failure'
+        run: |
+          echo "RelateAnything runtime smoke failed; evidence was preserved when available."
+          exit 1
