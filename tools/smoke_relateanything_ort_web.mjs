@@ -310,7 +310,7 @@ async function main() {
   const evidence = {
     schemaVersion: '1',
     recordType: 'relateanything_onnxruntime_web_wasm_smoke',
-    candidateId: 'maelic-relsgg-vits16',
+    candidateId: `${releaseFetch.modelRepo ?? 'unknown'}@${releaseFetch.modelRevision ?? 'unknown'}`,
     executedAtIso: new Date().toISOString(),
     sourceRevision: releaseFetch.modelRevision ?? null,
     artifacts: {
