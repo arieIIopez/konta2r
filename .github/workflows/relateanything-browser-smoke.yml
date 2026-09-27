@@ -10,6 +10,10 @@ on:
       - "tools/run_relateanything_browser_smoke.mjs"
       - ".github/workflows/relateanything-browser-smoke.yml"
 
+concurrency:
+  group: relateanything-browser-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
