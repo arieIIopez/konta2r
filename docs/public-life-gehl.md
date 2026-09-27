@@ -233,6 +233,8 @@ El vocabulario debe privilegiar acciones/relaciones observables.
 
 Cada predicado deberá pasar por un protocolo de validación específico. La posibilidad técnica de escribir cualquier frase no demuestra que el modelo pueda medirla con precisión suficiente.
 
+El control de frecuencia y reevaluación de pares se documenta en `docs/public-life-relation-sampling.md`.
+
 ## 7. Persistencia temporal de relaciones
 
 Una relación por frame no equivale a una actividad.
