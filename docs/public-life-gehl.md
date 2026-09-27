@@ -202,6 +202,8 @@ Los perfiles son hipótesis de benchmark, no una decisión de producto cerrada.
 
 ## 6. Vocabulario Public Life inicial
 
+El registro versionado del vocabulario y sus límites de interpretación está en `docs/public-life-vocabulary.md` y `src/public-life/vocabulary.ts`.
+
 El vocabulario debe privilegiar acciones/relaciones observables.
 
 ### Persona–elemento urbano
