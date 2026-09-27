@@ -60,6 +60,7 @@ jobs:
           cp .cache/relateanything/relsgg-vits16plus/relateanything.onnx             public/relateanything-smoke/relateanything.onnx
           cp .cache/relateanything/relsgg-vits16plus/public-life-bank.json             public/relateanything-smoke/public-life-bank.json
           cp node_modules/onnxruntime-web/dist/*.wasm public/ort/
+          cp node_modules/onnxruntime-web/dist/*.mjs public/ort/
           find public/ort -maxdepth 1 -type f -printf "%f %s bytes\n" | sort
           ls -lh public/relateanything-smoke/
 
