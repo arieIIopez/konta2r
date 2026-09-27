@@ -88,11 +88,11 @@ function localExternalData(fetchManifest) {
 
 function expectedInputFindings(session) {
   const expected = new Map([
-    ['image', { type: 'float32', shape: [1, 3, 448, 448] }],
-    ['boxes', { type: 'float32', shape: [1, 32, 4] }],
-    ['box_counts', { type: 'int64', shape: [1] }],
-    ['W', { type: 'float32' }],
-    ['alpha', { type: 'float32' }],
+    ['image', { type: 'float32', rank: 4, fixed: new Map([[1, 3], [2, 448], [3, 448]]) }],
+    ['boxes', { type: 'float32', rank: 3, fixed: new Map([[2, 4]]) }],
+    ['box_counts', { type: 'int64', rank: 1, fixed: new Map() }],
+    ['W', { type: 'float32', rank: 2, fixed: new Map([[1, 512]]) }],
+    ['alpha', { type: 'float32', rank: 1, fixed: new Map() }],
   ]);
   const findings = [];
 
@@ -106,13 +106,21 @@ function expectedInputFindings(session) {
   for (const metadata of session.inputMetadata) {
     const contract = expected.get(metadata.name);
     if (!contract || !metadata.isTensor) continue;
-    if (contract.type && String(metadata.type) !== contract.type) {
+    if (String(metadata.type) !== contract.type) {
       findings.push(`unexpected_input_type:${metadata.name}:${metadata.type}`);
     }
-    if (contract.shape && JSON.stringify(metadata.shape) !== JSON.stringify(contract.shape)) {
+    if (metadata.shape.length !== contract.rank) {
       findings.push(
-        `unexpected_input_shape:${metadata.name}:${metadata.shape.join('x')}`,
+        `unexpected_input_rank:${metadata.name}:${metadata.shape.join('x')}`,
       );
+      continue;
+    }
+    for (const [index, expectedDimension] of contract.fixed) {
+      if (metadata.shape[index] !== expectedDimension) {
+        findings.push(
+          `unexpected_input_dimension:${metadata.name}:${index}:${metadata.shape[index]}:${expectedDimension}`,
+        );
+      }
     }
   }
   return findings;
@@ -230,6 +238,16 @@ async function main() {
   const thresholds = JSON.parse(new TextDecoder().decode(thresholdsBytes));
   const calibration = JSON.parse(new TextDecoder().decode(calibrationBytes));
   const releaseFetch = JSON.parse(new TextDecoder().decode(releaseFetchBytes));
+  let upstreamProvenanceContent = null;
+  if (releaseFetch.provenance?.localPath) {
+    try {
+      upstreamProvenanceContent = JSON.parse(
+        await readFile(releaseFetch.provenance.localPath, 'utf8'),
+      );
+    } catch {
+      upstreamProvenanceContent = null;
+    }
+  }
 
   const findings = [];
   const memoryBefore = process.memoryUsage();
@@ -336,6 +354,7 @@ async function main() {
       upstreamSiblingCount: releaseFetch.siblingCount,
       externalDataCandidates: releaseFetch.externalDataCandidates ?? [],
       upstreamProvenance: releaseFetch.provenance ?? null,
+      upstreamProvenanceContent,
     },
     bank: {
       names: bank.names,
