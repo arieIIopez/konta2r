@@ -147,6 +147,50 @@ export const RELATEANYTHING_VITS16_2026_08_27: RelateAnythingReleaseContract = {
   pairWeight: 1,
 };
 
+
+/**
+ * Runtime-verified release contract for the currently recommended ViT-S/16+
+ * checkpoint. The exact ONNX artifact was executed with ONNX Runtime Web/WASM
+ * on the Konta2r self-hosted runner and is pinned by SHA-256.
+ *
+ * Runtime verification does not imply scientific validation on Public Life
+ * scenes or permission to redistribute the checkpoint.
+ */
+export const RELATEANYTHING_VITS16PLUS_2026_08_27: RelateAnythingReleaseContract = {
+  providerId: 'relateanything-onnx',
+  modelId: 'relsgg-vits16plus',
+  modelVersion: '2026-08-27-e9ea42a',
+  modelSha256: 'b8b6a047c5e0771a897a5015c2ffb09d8fe5e3ffa0651e1e61af0e8436a3617a',
+  sourceUrl: 'https://huggingface.co/maelic/relsgg-vits16plus/resolve/main/relateanything.onnx',
+  codeLicense: 'Apache-2.0',
+  weightsLicense: 'DINOv3-derived checkpoint; redistribution review required',
+  weightsRedistributionVerified: false,
+  imgSize: 448,
+  maxBoxes: 32,
+  finalBudget: 128,
+  vocabMode: 'input',
+  textDim: 512,
+  predicates: [
+    'wearing', 'riding', 'playing', 'sitting on', 'sitting at', 'holding',
+    'sitting in', 'looking at', 'using', 'watching', 'standing on',
+    'carrying', 'talking to', 'smiling at', 'standing beside', 'walking past',
+    'posing with', 'leaning against', 'part of', 'resting on', 'on',
+    'covering', 'inside', 'on top of', 'contained in', 'hanging from',
+    'surrounding', 'attached to', 'in front of', 'beside', 'to the left of',
+    'to the right of', 'behind', 'above', 'below',
+  ],
+  outputKind: 'logits',
+  outputs: {
+    predLogits: 'pred_logits',
+    pairLogits: 'pair_logits',
+    subjectIndex: 'sub_idx',
+    objectIndex: 'obj_idx',
+    validMask: 'valid_mask',
+  },
+  calibration: { a: 0.5651, b: -1.9623 },
+  pairWeight: 1,
+};
+
 function validProbability(value: number, label: string): number {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
     throw new Error(`${label} must be within [0, 1]`);

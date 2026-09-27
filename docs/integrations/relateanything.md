@@ -29,7 +29,7 @@ Repositorio:
 
 https://github.com/Maelic/RelateAnything
 
-El release ViT-S/16 exportado el 2026-08-27 declara:
+Los releases ViT-S/16 y ViT-S/16+ exportados el 2026-08-27 comparten el mismo contrato tensorial:
 
 ```text
 image      float32 [1, 3, 448, 448]
@@ -68,7 +68,15 @@ b = -1.9694
 w = 1
 ```
 
-Konta2r mantiene esta calibración dentro del contrato del artefacto y no vuelve a calibrarla silenciosamente.
+Para el release `relsgg-vits16plus` verificado en runtime:
+
+```text
+a = 0.5651
+b = -1.9623
+w = 1
+```
+
+Konta2r mantiene contratos separados por checkpoint y no reutiliza calibraciones entre releases. El contrato runtime-verificado queda fijado como `RELATEANYTHING_VITS16PLUS_2026_08_27` con SHA-256 del ONNX.
 
 ## Candidate gate
 
@@ -134,65 +142,87 @@ Esto es importante porque upstream aplica selección/budget de pares y Konta2r a
 
 El runtime experimental documentado en `docs/public-life-runtime.md` conserva esa diferencia mediante `pair_not_scored`.
 
-## Limitaciones actuales
+## Estado de runtime
 
-### 1. Sin runtime smoke real todavía
+### 1. Smoke real ONNX Runtime Web/WASM — verificado
 
-Los tests actuales validan:
+El release `maelic/relsgg-vits16plus` fue descargado por revisión exacta desde Hugging Face, hasheado y ejecutado en Patana con `onnxruntime-web`/WASM.
 
-- preparación del contrato;
-- shapes;
-- vocabulario dinámico;
-- score contract;
-- mapeo sujeto/objeto;
-- respeto del candidate gate.
+Evidencia:
 
-Todavía falta ejecutar un ONNX real de RelateAnything con ONNX Runtime Web en Patana/browser y registrar evidencia reproducible.
+`docs/benchmarks/evidence/relateanything-vits16plus-ort-web-wasm-smoke.json`
+
+Protocolo y resultados:
+
+`docs/integrations/relateanything-runtime-smoke.md`
+
+El smoke verificó:
+
+- ONNX SHA-256;
+- provenance upstream;
+- banco exacto;
+- calibración;
+- contrato de inputs/outputs;
+- inferencia real;
+- outputs finitos;
+- latencia diagnóstica;
+- consumo de memoria del proceso host.
+
+Esto verifica **runtime**, no precisión Public Life.
 
 ### 2. External data / chunks
 
-El export web upstream puede dividir modelos grandes en external-data/chunks.
+La revisión de `relsgg-vits16plus` utilizada no contiene external-data/chunks asociados al ONNX. El modelo de 207.9 MB abrió correctamente como archivo único.
 
-El adapter inicial acepta un `OnnxModelSource` que el runtime pueda abrir directamente. La carga explícita de bundles troceados queda como gate separado.
+Por tanto queda verificado que **ese release exacto** no requiere external data.
 
-No se afirmará compatibilidad con los bundles chunked hasta ejecutar ese flujo.
+La compatibilidad genérica con futuros bundles troceados sigue siendo un gate separado.
 
-### 3. Banco de predicados
+### 3. Browser nativo pendiente
+
+El smoke actual usa ONNX Runtime Web/WASM desde Node en el runner Patana.
+
+Aún falta verificar el mismo artefacto en un navegador real:
+
+- Chromium + WASM;
+- Chromium + WebGPU cuando esté disponible.
+
+### 4. Banco de predicados
 
 El adapter acepta un banco ya convertido a estructura JS/JSON.
 
 No descarga ni convierte automáticamente `predicate_bank.npz`.
 
-### 4. Predicados experimentales
+### 5. Predicados experimentales
 
 `walking with`, `sitting with`, `pushing` y `walking beside` siguen siendo hipótesis open-vocabulary. Necesitan embeddings compatibles y benchmark propio antes de usarse.
 
-### 5. Sin integración productiva del pipeline
+### 6. Sin integración productiva del pipeline
 
 El provider todavía no se ejecuta dentro de `MobilityFrameProcessor`.
 
 La integración debe ocurrir después de:
 
-1. runtime smoke real;
+1. smoke browser-native;
 2. corpus mínimo;
-3. sampling temporal;
-4. medición de latencia/memoria;
+3. benchmark A/B/C/D;
+4. medición de latencia/memoria/temperatura;
 5. revisión de licencia.
 
 ## Gate siguiente
 
-El siguiente paso técnico es producir una evidencia equivalente a los probes de detector:
+El adapter ya pasó de **contract verified** a **runtime verified** para el release vits16plus en ORT Web/WASM sobre Node host.
+
+El siguiente gate es:
 
 ```text
-modelo exacto
-+ SHA-256
-+ sidecar
-+ banco
-+ ONNX Runtime Web
-+ frame sintético/real
-+ cajas conocidas
-+ outputs observados
-+ latencia
+mismo artefacto
++ mismo banco
++ navegador Chromium
++ WASM / WebGPU
++ frame real
++ cajas Konta2r
++ evidencia de memoria/latencia
 ```
 
-Eso permitirá decidir si el adapter pasa de **contract verified** a **runtime verified**.
+Después de eso corresponde producir evidencia científica sobre corpus Public Life, no seguir agregando integración sin benchmark.

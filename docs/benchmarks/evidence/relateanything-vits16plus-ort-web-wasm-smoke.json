@@ -1,0 +1,532 @@
+{
+  "schemaVersion": "1",
+  "recordType": "relateanything_onnxruntime_web_wasm_smoke",
+  "candidateId": "maelic/relsgg-vits16plus@2db90096be5217bdc7a9003c042950f45723d105",
+  "executedAtIso": "2026-09-27T04:37:56.373Z",
+  "sourceRevision": "2db90096be5217bdc7a9003c042950f45723d105",
+  "artifacts": {
+    "model": {
+      "path": ".cache/relateanything/relsgg-vits16plus/relateanything.onnx",
+      "sha256": "b8b6a047c5e0771a897a5015c2ffb09d8fe5e3ffa0651e1e61af0e8436a3617a",
+      "sizeBytes": 207881414,
+      "source": {
+        "name": "relateanything.onnx",
+        "localPath": ".cache/relateanything/relsgg-vits16plus/relateanything.onnx",
+        "sourceUrl": "https://huggingface.co/maelic/relsgg-vits16plus/resolve/main/relateanything.onnx?download=true",
+        "finalHost": "us.aws.cdn.hf.co",
+        "sha256": "b8b6a047c5e0771a897a5015c2ffb09d8fe5e3ffa0651e1e61af0e8436a3617a",
+        "sizeBytes": 207881414,
+        "etag": "\"ce143fee4a6b8aea0fea6b41c59a09782e73d751fc5676ac3802a41af2d5eea5\"",
+        "contentLengthHeader": "207881414",
+        "contentType": "application/octet-stream",
+        "huggingFaceBlobId": "44a1b9ccb1b5f32986503757876b0d1ce529cb3b",
+        "huggingFaceLfs": {
+          "sha256": "b8b6a047c5e0771a897a5015c2ffb09d8fe5e3ffa0651e1e61af0e8436a3617a",
+          "size": 207881414,
+          "pointerSize": 134
+        }
+      }
+    },
+    "predicateBankSubset": {
+      "path": ".cache/relateanything/relsgg-vits16plus/public-life-bank.json",
+      "sha256": "5f64c4b4aa3176ef93f591cb868e635fdffda0138e48ea743083dfc406e5fc34",
+      "sizeBytes": 73485
+    },
+    "predicateBankSource": {
+      "name": "predicate_bank.npz",
+      "localPath": ".cache/relateanything/relsgg-vits16plus/predicate_bank.npz",
+      "sourceUrl": "https://huggingface.co/maelic/relsgg-vits16plus/resolve/main/predicate_bank.npz?download=true",
+      "finalHost": "us.aws.cdn.hf.co",
+      "sha256": "708f812d6579eab1be85b3378b79e376453c2d4f65b4fad9bcebb9f5bf05da06",
+      "sizeBytes": 469258,
+      "etag": "\"9f1a3cb90e2b4d18c4a07acf97024cb429c783ae4ce9eba593284c5521667296\"",
+      "contentLengthHeader": "469258",
+      "contentType": "application/octet-stream",
+      "huggingFaceBlobId": "97eb3542e522571a31d21f0b4dbbb4b049cecf23",
+      "huggingFaceLfs": {
+        "sha256": "708f812d6579eab1be85b3378b79e376453c2d4f65b4fad9bcebb9f5bf05da06",
+        "size": 469258,
+        "pointerSize": 131
+      }
+    },
+    "thresholds": {
+      "path": ".cache/relateanything/relsgg-vits16plus/thresholds.json",
+      "sha256": "12b2b667f8ecad0b98b7cb77074e25b54b4d0ea988f5ad7eb089504ec2bd400e",
+      "sizeBytes": 54252,
+      "source": {
+        "name": "thresholds.json",
+        "localPath": ".cache/relateanything/relsgg-vits16plus/thresholds.json",
+        "sourceUrl": "https://huggingface.co/maelic/relsgg-vits16plus/resolve/main/thresholds.json?download=true",
+        "finalHost": "huggingface.co",
+        "sha256": "12b2b667f8ecad0b98b7cb77074e25b54b4d0ea988f5ad7eb089504ec2bd400e",
+        "sizeBytes": 54252,
+        "etag": "W/\"b9788fc252e1801cc1230cb8c74e772a99003c31\"",
+        "contentLengthHeader": null,
+        "contentType": "text/plain; charset=utf-8",
+        "huggingFaceBlobId": "b9788fc252e1801cc1230cb8c74e772a99003c31",
+        "huggingFaceLfs": null
+      }
+    },
+    "calibration": {
+      "path": ".cache/relateanything/relsgg-vits16plus/calibration.json",
+      "sha256": "ccf8570123d49233b32587b16224e5708442489ba17525d4b4664646346e3ecb",
+      "sizeBytes": 763,
+      "source": {
+        "name": "calibration.json",
+        "localPath": ".cache/relateanything/relsgg-vits16plus/calibration.json",
+        "sourceUrl": "https://huggingface.co/maelic/relsgg-vits16plus/resolve/main/calibration.json?download=true",
+        "finalHost": "huggingface.co",
+        "sha256": "ccf8570123d49233b32587b16224e5708442489ba17525d4b4664646346e3ecb",
+        "sizeBytes": 763,
+        "etag": "\"fe4b16fba070b63c76dfd11b14aa546f08b8cd93\"",
+        "contentLengthHeader": "763",
+        "contentType": "text/plain; charset=utf-8",
+        "huggingFaceBlobId": "fe4b16fba070b63c76dfd11b14aa546f08b8cd93",
+        "huggingFaceLfs": null
+      }
+    }
+  },
+  "release": {
+    "modelRepo": "maelic/relsgg-vits16plus",
+    "modelRevision": "2db90096be5217bdc7a9003c042950f45723d105",
+    "modelLastModified": "2026-09-22T04:49:24.000Z",
+    "upstreamSiblingCount": 13,
+    "externalDataCandidates": [],
+    "upstreamProvenance": {
+      "name": "relateanything.json",
+      "localPath": ".cache/relateanything/relsgg-vits16plus/relateanything.json",
+      "sourceUrl": "https://raw.githubusercontent.com/Maelic/RelateAnything/main/deploy/dist/relsgg-vits16plus/relateanything.json",
+      "finalUrl": "https://raw.githubusercontent.com/Maelic/RelateAnything/main/deploy/dist/relsgg-vits16plus/relateanything.json",
+      "sha256": "a5aa12ccd217337d6fdfff068943348e010ffec44035ee1b2a99d27085e34b14",
+      "sizeBytes": 1634,
+      "etag": "W/\"b07cbd0132256ee12c417588f17f9bac85f3c875f9e4e886b6393c4c5260363a\"",
+      "contentType": "text/plain; charset=utf-8"
+    },
+    "upstreamProvenanceContent": {
+      "predicates": [
+        "wearing",
+        "riding",
+        "playing",
+        "sitting on",
+        "sitting at",
+        "holding",
+        "sitting in",
+        "looking at",
+        "using",
+        "watching",
+        "standing on",
+        "carrying",
+        "talking to",
+        "smiling at",
+        "standing beside",
+        "walking past",
+        "posing with",
+        "leaning against",
+        "part of",
+        "resting on",
+        "on",
+        "covering",
+        "inside",
+        "on top of",
+        "contained in",
+        "hanging from",
+        "surrounding",
+        "attached to",
+        "in front of",
+        "beside",
+        "to the left of",
+        "to the right of",
+        "behind",
+        "above",
+        "below"
+      ],
+      "img_size": 448,
+      "max_boxes": 32,
+      "final_budget": 128,
+      "vocab_mode": "input",
+      "text_dim": 512,
+      "outputs": [
+        "pred_logits",
+        "pair_logits",
+        "sub_idx",
+        "obj_idx",
+        "valid_mask"
+      ],
+      "output_kind": "logits",
+      "score_contract": "sigmoid(a * (pred_logit + w * pair_logit) + b)",
+      "calibration": {
+        "a": 0.5651,
+        "b": -1.9623
+      },
+      "calibrated": true,
+      "source_checkpoint": "runs/train/relsgg-vits16plus/checkpoint_last.pth",
+      "run_name": "relsgg-vits16plus",
+      "git_sha": "e9ea42aed60f766f12ad19d51709129c50110a3b",
+      "backbone_type": "dinov3",
+      "backbone_model": "facebook/dinov3-vits16plus-pretrain-lvd1689m",
+      "text_student": "runs/packed/text_student_v2_512/student.pt",
+      "text_student_sha256": "e0317830b68ea51e6711fc90d4a35954d0528e5bd78a8d5afd966601ce4ed119",
+      "pred_embeds": "runs/packed/datamix_v22/text_space/pred_embeds_studentv2_512_photo.npz",
+      "epoch": 12,
+      "torch": "2.13.0+cu130",
+      "transformers": "5.14.1",
+      "opset": 17,
+      "exported": "2026-08-27",
+      "check_max_abs_delta": 0.00006866455078125,
+      "backbone_model_local": "checkpoints/hf/vits16plus_lvd1689m"
+    }
+  },
+  "bank": {
+    "names": [
+      "sitting on",
+      "leaning against",
+      "talking to",
+      "riding",
+      "holding"
+    ],
+    "indices": [
+      3,
+      17,
+      12,
+      1,
+      5
+    ],
+    "dim": 512,
+    "sourceKeys": {
+      "names": {
+        "dtype": "object",
+        "shape": [
+          243
+        ]
+      },
+      "W": {
+        "dtype": "float32",
+        "shape": [
+          243,
+          512
+        ]
+      },
+      "alpha": {
+        "dtype": "float32",
+        "shape": [
+          243
+        ]
+      },
+      "thr": {
+        "dtype": "float32",
+        "shape": [
+          243
+        ]
+      },
+      "best_f1": {
+        "dtype": "float32",
+        "shape": [
+          243
+        ]
+      },
+      "is_spatial": {
+        "dtype": "uint8",
+        "shape": [
+          243
+        ]
+      },
+      "type_source": {
+        "dtype": "object",
+        "shape": [
+          243
+        ]
+      },
+      "recall": {
+        "dtype": "float32",
+        "shape": [
+          243
+        ]
+      },
+      "gt": {
+        "dtype": "int64",
+        "shape": [
+          243
+        ]
+      },
+      "default": {
+        "dtype": "object",
+        "shape": [
+          35
+        ]
+      },
+      "checkpoint": {
+        "dtype": "<U150",
+        "shape": []
+      },
+      "student": {
+        "dtype": "<U42",
+        "shape": []
+      }
+    },
+    "thresholdsFromBank": [
+      0.9750000238418579,
+      0.9850000143051147,
+      0.9900000095367432,
+      0.9800000190734863,
+      0.9750000238418579
+    ]
+  },
+  "thresholdsFileType": "object",
+  "calibration": {
+    "a": 0.5651,
+    "b": -1.9623,
+    "score": "sigmoid(a*(pred_logit+pair_logit)+b)",
+    "fit_on": "runs/packed/haystack test, 23,160 ADJUDICATED cells (2,857 pos / 20,303 explicit neg), 2-fold CV reported",
+    "means": "P(a human adjudicator calls this relation true). This is the deployment question and the analog of how a detector is calibrated against exhaustively-labelled COCO negatives.",
+    "ece_raw": 0.158,
+    "ece_out_of_fold": [
+      0.0096,
+      0.0138
+    ],
+    "auc_out_of_fold": [
+      0.9041,
+      0.9091
+    ],
+    "provenance": {
+      "checkpoint": "runs/train/relsgg-vits16plus/checkpoint_last.pth",
+      "weights": "ema",
+      "eval_budget": 992,
+      "produced_by": "deploy/fit_calibration.py",
+      "git": "e9ea42a",
+      "utc": "2026-08-27T01:26:52+00:00"
+    }
+  },
+  "environment": {
+    "nodeVersion": "v22.23.2",
+    "runtime": "onnxruntime-web",
+    "configuredExecutionProviders": [
+      "wasm"
+    ],
+    "wasmThreads": 1,
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "runtime": {
+    "attempted": true,
+    "passed": true,
+    "sessionAttempts": [
+      {
+        "label": "single_file",
+        "passed": true,
+        "durationMs": 3134.458428,
+        "externalDataPaths": []
+      }
+    ],
+    "selectedSessionAttempt": "single_file",
+    "staticMetadata": {
+      "inputs": [
+        {
+          "name": "image",
+          "kind": "tensor",
+          "type": "float32",
+          "shape": [
+            "batch",
+            3,
+            448,
+            448
+          ]
+        },
+        {
+          "name": "boxes",
+          "kind": "tensor",
+          "type": "float32",
+          "shape": [
+            "batch",
+            "num_boxes",
+            4
+          ]
+        },
+        {
+          "name": "box_counts",
+          "kind": "tensor",
+          "type": "int64",
+          "shape": [
+            "batch"
+          ]
+        },
+        {
+          "name": "W",
+          "kind": "tensor",
+          "type": "float32",
+          "shape": [
+            "num_predicates",
+            512
+          ]
+        },
+        {
+          "name": "alpha",
+          "kind": "tensor",
+          "type": "float32",
+          "shape": [
+            "num_predicates"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pred_logits",
+          "kind": "tensor",
+          "type": "float32",
+          "shape": [
+            "batch",
+            "num_pairs",
+            "num_predicates"
+          ]
+        },
+        {
+          "name": "pair_logits",
+          "kind": "tensor",
+          "type": "float32",
+          "shape": [
+            "batch",
+            "num_pairs"
+          ]
+        },
+        {
+          "name": "sub_idx",
+          "kind": "tensor",
+          "type": "int64",
+          "shape": [
+            "batch",
+            "num_pairs"
+          ]
+        },
+        {
+          "name": "obj_idx",
+          "kind": "tensor",
+          "type": "int64",
+          "shape": [
+            "batch",
+            "num_pairs"
+          ]
+        },
+        {
+          "name": "valid_mask",
+          "kind": "tensor",
+          "type": "bool",
+          "shape": [
+            "batch",
+            "num_pairs"
+          ]
+        }
+      ]
+    },
+    "syntheticInput": {
+      "image": {
+        "type": "float32",
+        "shape": [
+          1,
+          3,
+          448,
+          448
+        ],
+        "fill": 0.5
+      },
+      "boxes": {
+        "type": "float32",
+        "shape": [
+          1,
+          32,
+          4
+        ],
+        "activeBoxCount": 2,
+        "coordinateFormat": "normalized_cxcywh"
+      },
+      "vocabularySize": 5
+    },
+    "outputs": [
+      {
+        "name": "pred_logits",
+        "type": "float32",
+        "shape": [
+          1,
+          128,
+          5
+        ],
+        "dataLength": 640,
+        "finiteCount": 640,
+        "nonFiniteCount": 0,
+        "min": -4.670725345611572,
+        "max": 1.2223291397094727
+      },
+      {
+        "name": "pair_logits",
+        "type": "float32",
+        "shape": [
+          1,
+          128
+        ],
+        "dataLength": 128,
+        "finiteCount": 128,
+        "nonFiniteCount": 0,
+        "min": -0.9492207169532776,
+        "max": -0.2889333665370941
+      },
+      {
+        "name": "sub_idx",
+        "type": "int64",
+        "shape": [
+          1,
+          128
+        ],
+        "dataLength": 128,
+        "finiteCount": 128,
+        "nonFiniteCount": 0,
+        "min": 0,
+        "max": 3
+      },
+      {
+        "name": "obj_idx",
+        "type": "int64",
+        "shape": [
+          1,
+          128
+        ],
+        "dataLength": 128,
+        "finiteCount": 128,
+        "nonFiniteCount": 0,
+        "min": 0,
+        "max": 31
+      },
+      {
+        "name": "valid_mask",
+        "type": "bool",
+        "shape": [
+          1,
+          128
+        ],
+        "dataLength": 128,
+        "finiteCount": 128,
+        "nonFiniteCount": 0,
+        "min": 0,
+        "max": 1
+      }
+    ],
+    "inferenceMs": 6337.082951999999,
+    "findings": [],
+    "error": null
+  },
+  "memory": {
+    "before": {
+      "rss": 472334336,
+      "heapTotal": 7708672,
+      "heapUsed": 5156768,
+      "external": 417916140,
+      "arrayBuffers": 416057891
+    },
+    "after": {
+      "rss": 1114800128,
+      "heapTotal": 9887744,
+      "heapUsed": 7776992,
+      "external": 226394212,
+      "arrayBuffers": 224425404
+    },
+    "deltaRssBytes": 642465792,
+    "deltaExternalBytes": -191521928
+  }
+}
