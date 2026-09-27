@@ -78,9 +78,9 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function positiveInteger(value: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error(`${label} must be an integer >= 1`);
+function privacyFloorInteger(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 3) {
+    throw new Error(`${label} must be an integer >= 3 for Community privacy`);
   }
   return value;
 }
@@ -153,11 +153,11 @@ export function aggregatePublicLifeForCommunity(
   options: CommunityPublicLifeAggregationOptions,
 ): CommunityPublicLifeAggregationResult {
   const bucketMs = options.bucketMs ?? 5 * 60_000;
-  const minUniqueEntities = positiveInteger(
+  const minUniqueEntities = privacyFloorInteger(
     options.minUniqueEntities ?? 3,
     'minUniqueEntities',
   );
-  const minEpisodes = positiveInteger(options.minEpisodes ?? 3, 'minEpisodes');
+  const minEpisodes = privacyFloorInteger(options.minEpisodes ?? 3, 'minEpisodes');
   const durationQuantumSeconds = finitePositive(
     options.durationQuantumSeconds ?? 10,
     'durationQuantumSeconds',
