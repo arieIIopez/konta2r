@@ -2,7 +2,7 @@
   "schemaVersion": "1",
   "recordType": "relateanything_onnxruntime_web_wasm_smoke",
   "candidateId": "maelic/relsgg-vits16plus@2db90096be5217bdc7a9003c042950f45723d105",
-  "executedAtIso": "2026-09-27T04:37:11.858Z",
+  "executedAtIso": "2026-09-27T04:37:56.373Z",
   "sourceRevision": "2db90096be5217bdc7a9003c042950f45723d105",
   "artifacts": {
     "model": {
@@ -313,7 +313,7 @@
       {
         "label": "single_file",
         "passed": true,
-        "durationMs": 3252.281278,
+        "durationMs": 3134.458428,
         "externalDataPaths": []
       }
     ],
@@ -507,26 +507,26 @@
         "max": 1
       }
     ],
-    "inferenceMs": 5254.806332999999,
+    "inferenceMs": 6337.082951999999,
     "findings": [],
     "error": null
   },
   "memory": {
     "before": {
-      "rss": 472309760,
+      "rss": 472334336,
       "heapTotal": 7708672,
-      "heapUsed": 5151512,
+      "heapUsed": 5156768,
       "external": 417916140,
       "arrayBuffers": 416057891
     },
     "after": {
-      "rss": 1103151104,
+      "rss": 1114800128,
       "heapTotal": 9887744,
       "heapUsed": 7776992,
       "external": 226394212,
       "arrayBuffers": 224425404
     },
-    "deltaRssBytes": 630841344,
+    "deltaRssBytes": 642465792,
     "deltaExternalBytes": -191521928
   }
 }
