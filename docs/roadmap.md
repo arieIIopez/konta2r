@@ -112,9 +112,10 @@
 - [x] implementar candidate gate espacial para no ejecutar relaciones sobre todos los pares;
 - [x] implementar gate/sampling temporal para no ejecutar relaciones en todos los frames (`docs/public-life-relation-sampling.md`);
 - [x] construir adapter host-side experimental de RelateAnything con contrato ONNX publicado;
-- [ ] ejecutar runtime smoke real con artefacto + banco exactos y registrar evidencia;
+- [x] ejecutar runtime smoke real con artefacto + banco exactos y registrar evidencia (`docs/integrations/relateanything-runtime-smoke.md`);
 - [x] incorporar persistencia temporal de relaciones y estado “no evaluable por oclusión”;
 - [x] conectar gate + sampling + provider + persistencia en un runtime experimental Public Life (`docs/public-life-runtime.md`);
+- [ ] ejecutar smoke browser-native Chromium/WASM y Chromium/WebGPU con el release runtime-verificado;
 - [x] definir manifest y auditoría de cobertura del corpus Public Life (`docs/public-life-corpus.md`);
 - [x] definir esquema/protocolo de ground truth explícito para relaciones y episodios (`docs/public-life-annotation-protocol.md`);
 - [ ] generar ground truth de actividades/relaciones observables;
@@ -126,7 +127,7 @@
 - [ ] medir impacto sobre permanencia, uso de mobiliario e interacción probable;
 - [x] definir agregados Public Life compatibles con privacidad Community (`docs/community-public-life.md`);
 
-**Estado:** la fundación ya dispone de contratos, mapa semántico, gate espacial, sampling temporal, adapter RelateAnything, persistencia de episodios, manifest de corpus, evaluador A/B/C/D y runtime experimental desacoplado. Falta poblar/validar el corpus, ejecutar runtime smoke real y calibrar el sistema antes de cualquier adopción operacional.
+**Estado:** la fundación ya dispone de contratos, mapa semántico, gate espacial, sampling temporal, adapter RelateAnything, persistencia de episodios, manifest de corpus, evaluador A/B/C/D, runtime experimental desacoplado y smoke real ORT Web/WASM del release vits16plus. Falta smoke browser-native, poblar/validar el corpus y calibrar el sistema antes de cualquier adopción operacional.
 
 ---
 
