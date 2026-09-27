@@ -108,7 +108,7 @@
 - [x] separar conceptualmente observación automática e interpretación urbanística;
 - [x] definir contratos `RelationProvider`, `RelationObservation`, `RelationFrameState` y `ActivityEpisode`;
 - [x] implementar mapa semántico versionado de elementos estáticos del espacio público;
-- [ ] definir vocabulario Public Life mínimo y sus criterios de validación;
+- [x] definir vocabulario Public Life mínimo y sus criterios de validación (`docs/public-life-vocabulary.md`);
 - [x] implementar candidate gate espacial para no ejecutar relaciones sobre todos los pares;
 - [ ] implementar gate/sampling temporal para no ejecutar relaciones en todos los frames;
 - [ ] construir adapter experimental de RelateAnything;
