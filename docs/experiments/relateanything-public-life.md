@@ -1,5 +1,7 @@
 # Experimento — RelateAnything para Konta2r Public Life
 
+El contrato de evaluación común A/B/C/D está documentado en `docs/public-life-benchmark.md`.
+
 ## Pregunta
 
 ¿Un modelo abierto de relaciones visuales mejora de forma reproducible la observación de vida pública de Konta2r respecto de reglas geométricas/temporales más simples?
