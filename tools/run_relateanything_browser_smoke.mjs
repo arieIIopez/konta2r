@@ -37,7 +37,7 @@ async function runBackend(backend) {
       pageErrors.push(error.message);
     });
 
-    const url = `${BASE_URL}/tools/relateanything-browser-smoke/index.html?backend=${backend}`;
+    const url = `${BASE_URL}/?backend=${backend}`;
     const startedAt = Date.now();
     await page.goto(url, {
       waitUntil: 'domcontentloaded',
