@@ -351,6 +351,8 @@ El modo profesional puede conservar evidencia audiovisual únicamente cuando el 
 
 ## 11. Programa experimental
 
+El protocolo operativo del experimento se documenta en `docs/experiments/relateanything-public-life.md`.
+
 El primer benchmark deberá comparar:
 
 ```text
