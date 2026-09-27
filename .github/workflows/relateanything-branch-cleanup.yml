@@ -1,0 +1,29 @@
+name: one-time RelateAnything branch cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/relateanything-branch-cleanup.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: [self-hosted, linux, konta2r]
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Delete merged RelateAnything feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="feature/relateanything-provider"
+          if git ls-remote --exit-code --heads origin "refs/heads/${branch}" >/dev/null 2>&1; then
+            git push origin --delete "${branch}"
+          fi
