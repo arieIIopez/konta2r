@@ -1,0 +1,129 @@
+name: relateanything-browser-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/relateanything-browser-smoke
+    paths:
+      - "tools/relateanything-browser-smoke/**"
+      - "tools/run_relateanything_browser_smoke.mjs"
+      - ".github/workflows/relateanything-browser-smoke.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, konta2r]
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install exact bank extraction dependency
+        run: python -m pip install --disable-pip-version-check "numpy==2.3.3"
+
+      - name: Fetch exact vits16plus release
+        run: |
+          node tools/fetch_relateanything_release.mjs             maelic/relsgg-vits16plus             .cache/relateanything/relsgg-vits16plus
+
+      - name: Extract exact Public Life predicate subset
+        run: |
+          python tools/extract_relateanything_bank.py             --bank .cache/relateanything/relsgg-vits16plus/predicate_bank.npz             --output .cache/relateanything/relsgg-vits16plus/public-life-bank.json             --predicates               "sitting on"               "leaning against"               "talking to"               "riding"               "holding"
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --package-lock=false "playwright@1.55.0"
+          npx playwright install chromium
+
+      - name: Prepare browser-only runtime assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public/relateanything-smoke public/ort
+          cp .cache/relateanything/relsgg-vits16plus/relateanything.onnx             public/relateanything-smoke/relateanything.onnx
+          cp .cache/relateanything/relsgg-vits16plus/public-life-bank.json             public/relateanything-smoke/public-life-bank.json
+          cp node_modules/onnxruntime-web/dist/*.wasm public/ort/
+          find public/ort -maxdepth 1 -type f -printf "%f %s bytes\n" | sort
+          ls -lh public/relateanything-smoke/
+
+      - name: Start Vite harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npx vite --host 127.0.0.1 --port 4174 --strictPort             >/tmp/relateanything-browser-vite.log 2>&1 &
+          echo "$!" >/tmp/relateanything-browser-vite.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent               "http://127.0.0.1:4174/tools/relateanything-browser-smoke/index.html?backend=wasm"               >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/relateanything-browser-vite.log
+          exit 1
+
+      - name: Execute Chromium WASM and WebGPU smoke
+        id: browser_smoke
+        continue-on-error: true
+        run: |
+          node tools/run_relateanything_browser_smoke.mjs             http://127.0.0.1:4174             docs/benchmarks/evidence/relateanything-vits16plus-browser-smoke.json
+
+      - name: Upload browser smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relateanything-vits16plus-browser-smoke
+          path: |
+            docs/benchmarks/evidence/relateanything-vits16plus-browser-smoke.json
+            /tmp/relateanything-browser-vite.log
+          if-no-files-found: warn
+
+      - name: Commit reproducible browser evidence to feature branch
+        if: always() && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="docs/benchmarks/evidence/relateanything-vits16plus-browser-smoke.json"
+          if [ ! -f "$evidence" ]; then
+            echo "No browser evidence file was produced."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$evidence"
+          if git diff --cached --quiet; then
+            echo "Browser evidence unchanged."
+            exit 0
+          fi
+          git commit -m "evidence: record RelateAnything Chromium smoke"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Stop Vite harness
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/relateanything-browser-vite.pid ]; then
+            kill "$(cat /tmp/relateanything-browser-vite.pid)" 2>/dev/null || true
+          fi
+
+      - name: Enforce Chromium WASM gate
+        if: steps.browser_smoke.outcome == 'failure'
+        run: |
+          echo "Chromium WASM smoke failed; evidence was preserved when available."
+          exit 1
