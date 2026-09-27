@@ -197,6 +197,43 @@ const INSERT_SPATIAL_SQL = `
   )
 `;
 
+const INSERT_PUBLIC_LIFE_SQL = `
+  insert into private.public_life_aggregates (
+    batch_id,
+    bucket_start,
+    bucket_end,
+    activity_class,
+    element_class,
+    unique_entities,
+    episode_count,
+    total_duration_seconds,
+    participant_time_seconds,
+    mean_quality
+  )
+  select
+    $1::uuid,
+    to_timestamp(r.bucket_start_ms / 1000.0),
+    to_timestamp(r.bucket_end_ms / 1000.0),
+    r.activity_class,
+    r.element_class,
+    r.unique_entities,
+    r.episode_count,
+    r.total_duration_seconds,
+    r.participant_time_seconds,
+    r.mean_quality
+  from jsonb_to_recordset($2::jsonb) as r(
+    bucket_start_ms bigint,
+    bucket_end_ms bigint,
+    activity_class text,
+    element_class text,
+    unique_entities integer,
+    episode_count integer,
+    total_duration_seconds double precision,
+    participant_time_seconds double precision,
+    mean_quality double precision
+  )
+`;
+
 const TOUCH_CREDENTIAL_SQL = `
   update private.node_credentials
   set last_used_at = now()
@@ -237,11 +274,31 @@ function spatialRows(batch: PreparedCommunityBatch): string {
   )));
 }
 
+function publicLifeRows(batch: PreparedCommunityBatch): string {
+  return JSON.stringify(batch.envelope.records.flatMap((record) => (
+    record.aggregateType !== 'public_life'
+      ? []
+      : [{
+          bucket_start_ms: record.bucketStartMs,
+          bucket_end_ms: record.bucketEndMs,
+          activity_class: record.activityClass,
+          element_class: record.elementClass,
+          unique_entities: record.uniqueEntities,
+          episode_count: record.episodeCount,
+          total_duration_seconds: record.totalDurationSeconds,
+          participant_time_seconds: record.participantTimeSeconds,
+          mean_quality: record.meanQuality,
+        }]
+  )));
+}
+
 async function insertAggregates(tx: SqlExecutor, batchId: string, batch: PreparedCommunityBatch): Promise<void> {
   const flow = batch.envelope.records.some((record) => record.aggregateType === 'flow');
   const spatial = batch.envelope.records.some((record) => record.aggregateType === 'spatial');
+  const publicLife = batch.envelope.records.some((record) => record.aggregateType === 'public_life');
   if (flow) await tx.query(INSERT_FLOW_SQL, [batchId, flowRows(batch)]);
   if (spatial) await tx.query(INSERT_SPATIAL_SQL, [batchId, spatialRows(batch)]);
+  if (publicLife) await tx.query(INSERT_PUBLIC_LIFE_SQL, [batchId, publicLifeRows(batch)]);
 }
 
 async function touchCredential(tx: SqlExecutor, nodeId: string): Promise<void> {
