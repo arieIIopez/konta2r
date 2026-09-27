@@ -2,7 +2,6 @@ import type { EntityType } from '../core/types';
 import type {
   RelationCandidate,
   RelationEndpoint,
-  RelationCandidateReason,
 } from './types';
 
 export interface RelationCandidateGateConfig {
@@ -49,25 +48,6 @@ function isEligibleSubject(endpoint: RelationEndpoint): boolean {
     && PERSON_LIKE.has(endpoint.entityType);
 }
 
-function pairReason(
-  subject: RelationEndpoint,
-  object: RelationEndpoint,
-): RelationCandidateReason {
-  if (
-    subject.kind === 'track'
-    && object.kind === 'track'
-    && (
-      subject.entityType === 'pedestrian'
-      || object.entityType === 'cyclist'
-      || object.entityType === 'motorcyclist'
-      || object.entityType === 'skater'
-    )
-  ) {
-    return 'modal_ambiguity';
-  }
-  return 'spatial_proximity';
-}
-
 /**
  * Lightweight pre-gate for expensive relation inference.
  *
@@ -110,7 +90,7 @@ export function selectRelationCandidates(
         subject: { ...subject, bbox: { ...subject.bbox } },
         object: { ...object, bbox: { ...object.bbox } },
         priority,
-        reason: pairReason(subject, object),
+        reason: 'spatial_proximity',
       });
     }
   }
