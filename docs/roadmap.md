@@ -1,6 +1,6 @@
 # Hoja de ruta Konta2r v2
 
-> Estado auditado contra el repositorio el **2026-09-02**. Un `[x]` significa que existe una implementación verificable en código/tests; no implica que la fase esté científicamente cerrada. Los ítems de benchmark/validación sólo se consideran completos cuando existe evidencia reproducible, no por mera existencia de código.
+> Estado auditado contra el repositorio el **2026-09-26**. Un `[x]` significa que existe una implementación verificable en código/tests; no implica que la fase esté científicamente cerrada. Los ítems de benchmark/validación sólo se consideran completos cuando existe evidencia reproducible, no por mera existencia de código.
 
 ## Fase 0 — Fundación
 
@@ -97,6 +97,30 @@
 - [ ] matriz de confusión por modo de movilidad.
 
 **Estado:** fusión modal base implementada, todavía no científicamente calibrada.
+
+---
+
+## Fase 4B — Vida pública, relaciones y ocupación del espacio
+
+**Objetivo:** extender Konta2r desde la medición de movilidad hacia observación reproducible de vida pública inspirada en Public Space / Public Life.
+
+- [x] definir marco metodológico inicial `docs/public-life-gehl.md`;
+- [x] separar conceptualmente observación automática e interpretación urbanística;
+- [ ] definir contratos `RelationProvider`, `RelationObservation` y `ActivityEpisode`;
+- [ ] implementar mapa semántico versionado de elementos estáticos del espacio público;
+- [ ] definir vocabulario Public Life mínimo y sus criterios de validación;
+- [ ] implementar candidate gate para no ejecutar relaciones sobre todos los pares/frames;
+- [ ] construir adapter experimental de RelateAnything;
+- [ ] incorporar persistencia temporal de relaciones y estado “no evaluable por oclusión”;
+- [ ] generar ground truth de actividades/relaciones observables;
+- [ ] benchmark A: reglas geométricas;
+- [ ] benchmark B: RelationProvider;
+- [ ] benchmark C: geometría + RelationProvider;
+- [ ] benchmark D: geometría + RelationProvider + persistencia temporal;
+- [ ] medir impacto sobre permanencia, uso de mobiliario e interacción probable;
+- [ ] definir agregados Public Life compatibles con privacidad Community.
+
+**Estado:** línea incorporada formalmente al producto. La hipótesis es que Konta2r puede medir no sólo desplazamiento, sino permanencia, actividad observable y relaciones persona–espacio/persona–persona manteniendo una cadena auditable desde pixels hasta el indicador urbanístico.
 
 ---
 
@@ -235,9 +259,11 @@ El orden inicial ya produjo implementaciones funcionales en geometría, tracking
 1. **ensayos reales del piloto en teléfonos `eco / balanced / performance`** y acumulación de evidencia durable;
 2. **benchmark científico de detector, tracking y error de conteo** sobre corpus congelado;
 3. **calibración de fusión modal** con ground truth;
-4. desplegar un **backend Supabase dedicado Konta2r** y ejecutar E2E offline/online cuando exista proyecto autorizado;
-5. validar queries/dashboard de agregados, retención y gobernanza Community;
-6. desarrollar polígonos/eventos de zona y cerrar la configuración versionada de levantamiento profesional;
-7. avanzar a métricas espaciales/calibración sólo cuando exista evidencia geométrica suficiente.
+4. construir el **MVP Public Life**: mapa semántico + contratos de relaciones/episodios + corpus mínimo;
+5. evaluar **RelateAnything** como `RelationProvider` experimental frente a reglas geométricas y solución híbrida;
+6. desplegar un **backend Supabase dedicado Konta2r** y ejecutar E2E offline/online cuando exista proyecto autorizado;
+7. validar queries/dashboard de agregados, retención y gobernanza Community;
+8. desarrollar polígonos/eventos de zona y cerrar la configuración versionada de levantamiento profesional;
+9. avanzar a métricas espaciales/calibración sólo cuando exista evidencia geométrica suficiente.
 
 La regla metodológica se mantiene: Konta2r no declarará precisión, calidad, anonimato ni selección de modelo por intuición. Cada afirmación deberá corresponder a una métrica reproducible o a una garantía explícita de arquitectura.
