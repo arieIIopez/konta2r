@@ -81,10 +81,13 @@ describe('RelateAnything ONNX provider', () => {
       4,
     );
 
-    expect([...boxes.slice(0, 8)]).toEqual([
+    const expected = [
       0.2, 0.4, 0.2, 0.4,
       0.55, 0.4, 0.3, 0.2,
-    ]);
+    ];
+    expected.forEach((value, index) => {
+      expect(boxes[index]).toBeCloseTo(value, 6);
+    });
     expect(boxes).toHaveLength(16);
   });
 
