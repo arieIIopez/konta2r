@@ -2,7 +2,7 @@
   "schemaVersion": "1",
   "recordType": "relateanything_browser_runtime_smoke",
   "candidateId": "maelic/relsgg-vits16plus",
-  "executedAtIso": "2026-09-27T04:48:39.717Z",
+  "executedAtIso": "2026-09-27T04:50:08.064Z",
   "runner": {
     "nodeVersion": "v22.23.2",
     "platform": "linux",
@@ -12,7 +12,7 @@
   "wasm": {
     "backend": "wasm",
     "harnessCompleted": true,
-    "harnessDurationMs": 882,
+    "harnessDurationMs": 801,
     "browserVersion": "140.0.7339.16",
     "launchArgs": [
       "--disable-dev-shm-usage"
@@ -37,8 +37,8 @@
       "backend": "wasm",
       "attempted": true,
       "passed": false,
-      "startedAtIso": "2026-09-27T04:48:37.986Z",
-      "completedAtIso": "2026-09-27T04:48:38.778Z",
+      "startedAtIso": "2026-09-27T04:50:06.086Z",
+      "completedAtIso": "2026-09-27T04:50:06.816Z",
       "environment": {
         "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/140.0.7339.16 Safari/537.36",
         "crossOriginIsolated": false,
@@ -67,7 +67,7 @@
   "webgpu": {
     "backend": "webgpu",
     "harnessCompleted": true,
-    "harnessDurationMs": 706,
+    "harnessDurationMs": 963,
     "browserVersion": "140.0.7339.16",
     "launchArgs": [
       "--disable-dev-shm-usage",
@@ -94,8 +94,8 @@
       "backend": "webgpu",
       "attempted": true,
       "passed": false,
-      "startedAtIso": "2026-09-27T04:48:39.024Z",
-      "completedAtIso": "2026-09-27T04:48:39.654Z",
+      "startedAtIso": "2026-09-27T04:50:07.133Z",
+      "completedAtIso": "2026-09-27T04:50:07.999Z",
       "environment": {
         "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/140.0.7339.16 Safari/537.36",
         "crossOriginIsolated": false,
