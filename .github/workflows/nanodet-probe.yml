@@ -2,22 +2,18 @@ name: nanodet-probe-evidence
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature/nanodet-probe-evidence
-    paths:
-      - tools/probe_nanodet.py
-      - .github/workflows/nanodet-probe.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   probe:
     runs-on: [self-hosted, linux, konta2r]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -35,14 +31,9 @@ jobs:
             --expected-size 3800954 \
             --output docs/evidence/nanodet-m-plus-1.5x-416.onnx-probe.json
 
-      - name: Commit observed contract
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add docs/evidence/nanodet-m-plus-1.5x-416.onnx-probe.json
-          if git diff --cached --quiet; then
-            echo "Evidence unchanged"
-            exit 0
-          fi
-          git commit -m "evidence: record NanoDet ONNX probe"
-          git push
+      - name: Upload observed contract
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanodet-onnx-probe
+          path: docs/evidence/nanodet-m-plus-1.5x-416.onnx-probe.json
+          if-no-files-found: error
