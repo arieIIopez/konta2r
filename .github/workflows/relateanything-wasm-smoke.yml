@@ -42,26 +42,26 @@ jobs:
 
       - name: Fetch exact upstream release artifacts
         run: |
-          node tools/fetch_relateanything_release.mjs             maelic/relsgg-vits16             .cache/relateanything/relsgg-vits16
+          node tools/fetch_relateanything_release.mjs             maelic/relsgg-vits16plus             .cache/relateanything/relsgg-vits16plus
 
       - name: Extract exact Public Life predicate subset
         run: |
-          python tools/extract_relateanything_bank.py             --bank .cache/relateanything/relsgg-vits16/predicate_bank.npz             --output .cache/relateanything/relsgg-vits16/public-life-bank.json             --predicates               "sitting on"               "leaning against"               "talking to"               "riding"               "holding"
+          python tools/extract_relateanything_bank.py             --bank .cache/relateanything/relsgg-vits16plus/predicate_bank.npz             --output .cache/relateanything/relsgg-vits16plus/public-life-bank.json             --predicates               "sitting on"               "leaning against"               "talking to"               "riding"               "holding"
 
       - name: Execute exact graph with ONNX Runtime Web WASM
         id: runtime_smoke
         continue-on-error: true
         run: |
-          node tools/smoke_relateanything_ort_web.mjs             .cache/relateanything/relsgg-vits16/relateanything.onnx             .cache/relateanything/relsgg-vits16/public-life-bank.json             .cache/relateanything/relsgg-vits16/thresholds.json             .cache/relateanything/relsgg-vits16/calibration.json             .cache/relateanything/relsgg-vits16/release-fetch.json             docs/benchmarks/evidence/relateanything-vits16-ort-web-wasm-smoke.json
+          node tools/smoke_relateanything_ort_web.mjs             .cache/relateanything/relsgg-vits16plus/relateanything.onnx             .cache/relateanything/relsgg-vits16plus/public-life-bank.json             .cache/relateanything/relsgg-vits16plus/thresholds.json             .cache/relateanything/relsgg-vits16plus/calibration.json             .cache/relateanything/relsgg-vits16plus/release-fetch.json             docs/benchmarks/evidence/relateanything-vits16plus-ort-web-wasm-smoke.json
 
       - name: Upload runtime smoke evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: relateanything-vits16-ort-web-wasm-smoke
+          name: relateanything-vits16plus-ort-web-wasm-smoke
           path: |
-            docs/benchmarks/evidence/relateanything-vits16-ort-web-wasm-smoke.json
-            .cache/relateanything/relsgg-vits16/release-fetch.json
+            docs/benchmarks/evidence/relateanything-vits16plus-ort-web-wasm-smoke.json
+            .cache/relateanything/relsgg-vits16plus/release-fetch.json
           if-no-files-found: warn
 
       - name: Commit reproducible evidence to feature branch
@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          evidence="docs/benchmarks/evidence/relateanything-vits16-ort-web-wasm-smoke.json"
+          evidence="docs/benchmarks/evidence/relateanything-vits16plus-ort-web-wasm-smoke.json"
           if [ ! -f "$evidence" ]; then
             echo "No evidence file was produced."
             exit 0
