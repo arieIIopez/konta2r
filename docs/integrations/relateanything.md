@@ -126,6 +126,14 @@ El modo experimental puede trabajar con un artefacto suministrado externamente, 
 
 Hasta completar esa revisión no se incorporarán pesos al bundle de Konta2r.
 
+## Semántica de salida
+
+El adapter declara `scoreSemantics = thresholded_partial`.
+
+Esto es importante porque upstream aplica selección/budget de pares y Konta2r además puede aplicar thresholds. Por tanto, que un par/predicado no aparezca en la salida **no demuestra score 0**.
+
+El runtime experimental documentado en `docs/public-life-runtime.md` conserva esa diferencia mediante `pair_not_scored`.
+
 ## Limitaciones actuales
 
 ### 1. Sin runtime smoke real todavía
