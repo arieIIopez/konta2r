@@ -43,10 +43,15 @@ async function runBackend(backend) {
       waitUntil: 'domcontentloaded',
       timeout: 120_000,
     });
+    await page.waitForSelector('#result', { timeout: 15_000 });
+    const heading = await page.locator('h1').textContent();
+    if (heading?.trim() !== 'RelateAnything browser smoke') {
+      throw new Error(`unexpected_harness_page:${heading ?? 'missing heading'}`);
+    }
     await page.waitForFunction(
       () => window.__RELATEANYTHING_SMOKE_RESULT__ !== undefined,
       undefined,
-      { timeout: 240_000 },
+      { timeout: 180_000 },
     );
     const result = await page.evaluate(
       () => window.__RELATEANYTHING_SMOKE_RESULT__,
