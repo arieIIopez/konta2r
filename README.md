@@ -91,6 +91,7 @@ La política completa está en `docs/development-workflow.md`.
 - `docs/public-life-annotation-protocol.md` — juicios explícitos positivo/negativo/incierto/no-observable y episodios de actividad;
 - `docs/public-life-benchmark.md` — métricas comunes A/B/C/D para relaciones y episodios Public Life;
 - `docs/community-public-life.md` — agregados Public Life privacy-first, supresión y persistencia Community;
+- `docs/public-life-runtime.md` — orquestación experimental de tracks, mapa semántico, sampling, relaciones y episodios;
 - `docs/community-flow-runtime.md` — frontera de agregación Community;
 - `docs/community-node-provisioning.md` — enrolamiento, credencial sensor y recuperación;
 - `docs/supabase-deployment.md` — runbook para el primer backend dedicado y E2E.
