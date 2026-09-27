@@ -110,7 +110,7 @@
 - [x] implementar mapa semántico versionado de elementos estáticos del espacio público;
 - [x] definir vocabulario Public Life mínimo y sus criterios de validación (`docs/public-life-vocabulary.md`);
 - [x] implementar candidate gate espacial para no ejecutar relaciones sobre todos los pares;
-- [ ] implementar gate/sampling temporal para no ejecutar relaciones en todos los frames;
+- [x] implementar gate/sampling temporal para no ejecutar relaciones en todos los frames (`docs/public-life-relation-sampling.md`);
 - [x] construir adapter host-side experimental de RelateAnything con contrato ONNX publicado;
 - [ ] ejecutar runtime smoke real con artefacto + banco exactos y registrar evidencia;
 - [x] incorporar persistencia temporal de relaciones y estado “no evaluable por oclusión”;
@@ -123,7 +123,7 @@
 - [ ] medir impacto sobre permanencia, uso de mobiliario e interacción probable;
 - [ ] definir agregados Public Life compatibles con privacidad Community.
 
-**Estado:** la fundación ya dispone de contratos de relaciones, mapa semántico, gate espacial y persistencia temporal de episodios. Falta conectar estas piezas al pipeline, congelar vocabulario/corpus y ejecutar el benchmark antes de incorporar un modelo relacional.
+**Estado:** la fundación ya dispone de contratos, mapa semántico, gate espacial, sampling temporal, adapter RelateAnything, persistencia de episodios y manifest de corpus. Falta poblar/validar el corpus, ejecutar runtime smoke real y conectar estas piezas al pipeline experimental antes de cualquier adopción operacional.
 
 ---
 
