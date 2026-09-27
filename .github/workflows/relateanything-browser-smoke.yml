@@ -40,12 +40,10 @@ jobs:
         run: python -m pip install --disable-pip-version-check "numpy==2.3.3"
 
       - name: Fetch exact vits16plus release
-        run: |
-          node tools/fetch_relateanything_release.mjs             maelic/relsgg-vits16plus             .cache/relateanything/relsgg-vits16plus
+        run: node tools/fetch_relateanything_release.mjs maelic/relsgg-vits16plus .cache/relateanything/relsgg-vits16plus
 
       - name: Extract exact Public Life predicate subset
-        run: |
-          python tools/extract_relateanything_bank.py             --bank .cache/relateanything/relsgg-vits16plus/predicate_bank.npz             --output .cache/relateanything/relsgg-vits16plus/public-life-bank.json             --predicates               "sitting on"               "leaning against"               "talking to"               "riding"               "holding"
+        run: python tools/extract_relateanything_bank.py --bank .cache/relateanything/relsgg-vits16plus/predicate_bank.npz --output .cache/relateanything/relsgg-vits16plus/public-life-bank.json --predicates "sitting on" "leaning against" "talking to" "riding" "holding"
 
       - name: Install Playwright Chromium
         run: |
@@ -56,34 +54,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p public/relateanything-smoke public/ort
-          cp .cache/relateanything/relsgg-vits16plus/relateanything.onnx             public/relateanything-smoke/relateanything.onnx
-          cp .cache/relateanything/relsgg-vits16plus/public-life-bank.json             public/relateanything-smoke/public-life-bank.json
-          cp node_modules/onnxruntime-web/dist/*.wasm public/ort/
-          cp node_modules/onnxruntime-web/dist/*.mjs public/ort/
-          find public/ort -maxdepth 1 -type f -printf "%f %s bytes\n" | sort
-          ls -lh public/relateanything-smoke/
+          smoke_root="tools/relateanything-browser-smoke"
+          mkdir -p "$smoke_root/public/relateanything-smoke" "$smoke_root/public/ort"
+          cp .cache/relateanything/relsgg-vits16plus/relateanything.onnx "$smoke_root/public/relateanything-smoke/relateanything.onnx"
+          cp .cache/relateanything/relsgg-vits16plus/public-life-bank.json "$smoke_root/public/relateanything-smoke/public-life-bank.json"
+          cp node_modules/onnxruntime-web/dist/*.wasm "$smoke_root/public/ort/"
+          cp node_modules/onnxruntime-web/dist/*.mjs "$smoke_root/public/ort/"
+          find "$smoke_root/public/ort" -maxdepth 1 -type f -printf "%f %s bytes\n" | sort
+          ls -lh "$smoke_root/public/relateanything-smoke/"
 
-      - name: Start Vite harness
+      - name: Build static browser harness
+        run: npx vite build tools/relateanything-browser-smoke
+
+      - name: Start static browser harness
         shell: bash
         run: |
           set -euo pipefail
-          nohup npx vite --host 127.0.0.1 --port 4174 --strictPort             >/tmp/relateanything-browser-vite.log 2>&1 &
-          echo "$!" >/tmp/relateanything-browser-vite.pid
+          nohup python -m http.server 4174 --bind 127.0.0.1 --directory tools/relateanything-browser-smoke/dist >/tmp/relateanything-browser-static.log 2>&1 &
+          echo "$!" >/tmp/relateanything-browser-static.pid
           for attempt in $(seq 1 60); do
-            if curl --fail --silent               "http://127.0.0.1:4174/tools/relateanything-browser-smoke/index.html?backend=wasm"               >/dev/null; then
+            if curl --fail --silent "http://127.0.0.1:4174/?backend=wasm" >/dev/null; then
               exit 0
             fi
             sleep 1
           done
-          cat /tmp/relateanything-browser-vite.log
+          cat /tmp/relateanything-browser-static.log
           exit 1
 
       - name: Execute Chromium WASM and WebGPU smoke
         id: browser_smoke
         continue-on-error: true
-        run: |
-          node tools/run_relateanything_browser_smoke.mjs             http://127.0.0.1:4174             docs/benchmarks/evidence/relateanything-vits16plus-browser-smoke.json
+        run: node tools/run_relateanything_browser_smoke.mjs http://127.0.0.1:4174 docs/benchmarks/evidence/relateanything-vits16plus-browser-smoke.json
 
       - name: Upload browser smoke evidence
         if: always()
