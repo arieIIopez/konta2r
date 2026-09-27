@@ -1,16 +1,24 @@
 # konta2r
 
-**Konta2r** es una plataforma abierta de visión artificial para observar, medir y auditar movilidad y uso del espacio público.
+**Konta2r** es una plataforma abierta de visión artificial para observar, medir y auditar **movilidad, ocupación y vida pública**. Su objetivo es cuantificar no sólo cómo las personas y vehículos se desplazan, sino también cómo las personas permanecen, interactúan y utilizan los elementos del espacio público.
 
 El proyecto nace de un prototipo en navegador basado en TensorFlow.js + COCO-SSD (`contador.html`). Ese prototipo demostró la viabilidad de detectar usuarios y contar cruces; la v2 lo reemplaza por una arquitectura modular con tracking, geometría versionada, inferencia ONNX, validación reproducible y una red Community de teléfonos reutilizados.
 
 ## Objetivo
 
-Construir un instrumento reproducible para estudios de movilidad capaz de transformar video en **entidades, trayectorias y eventos auditables**, y al mismo tiempo permitir una red comunitaria que publique únicamente agregados anónimos por diseño.
+Construir un instrumento reproducible para estudios de **movilidad y vida pública** capaz de transformar video en **entidades, trayectorias, relaciones, episodios y eventos auditables**, y al mismo tiempo permitir una red comunitaria que publique únicamente agregados anónimos por diseño.
 
 Flujo local/profesional:
 
-`video → detección → asociación modal → tracking → motor espacial → eventos → evidencia/validación`
+```text
+video → detección → tracking
+                    ├─ movilidad → geometría → eventos de flujo
+                    └─ vida pública → relaciones → permanencia/actividad
+                                      ↓
+                             evidencia + validación
+```
+
+La rama de vida pública se inspira en la tradición Public Space / Public Life asociada a Jan Gehl: contar y mapear no sólo movimiento, sino también permanencia, actividades observables, relaciones entre personas y relación persona–espacio.
 
 Flujo Community:
 
@@ -23,7 +31,8 @@ Flujo Community:
 - **Reproducibilidad:** dependencias, modelos, metodología y configuración versionados.
 - **Validez antes que apariencia:** precisión del instrumento y protocolo de validación por sobre una interfaz llamativa.
 - **Arquitectura modular:** detector, tracker, clasificación modal, geometría y transporte Community son componentes separables.
-- **Orientación a movilidad:** peatones, bicicletas, ciclos, motocicletas, automóviles, buses, camiones y otras categorías se modelan como entidades de movilidad evitando dobles conteos.
+- **Movilidad y vida pública:** peatones, bicicletas, ciclos, motocicletas, automóviles, buses y camiones se modelan como entidades de movilidad; personas, permanencias y relaciones persona–persona/persona–espacio pueden alimentar análisis Public Life.
+- **Observación antes que interpretación:** Konta2r registra comportamientos y relaciones visualmente observables; categorías urbanísticas derivadas deben conservar su evidencia, reglas y nivel de incertidumbre.
 - **Identidad separada:** la cuenta humana administra el nodo; el sensor opera con una credencial revocable propia.
 
 ## Estado
@@ -65,15 +74,18 @@ La política completa está en `docs/development-workflow.md`.
 2. acumular evidencia de campo en teléfonos `eco / balanced / performance`;
 3. cerrar benchmark científico de detector y tracking sobre corpus congelado;
 4. calibrar fusión modal con ground truth;
-5. extender geometría a polígonos/zonas;
-6. avanzar a calibración espacial y métricas físicas cuando exista evidencia suficiente;
-7. construir dashboard/mapa Community únicamente sobre datos agregados.
+5. desarrollar la línea **Public Life / Gehl**: permanencia, actividades observables, mapa semántico del espacio y relaciones persona–persona/persona–elemento urbano;
+6. evaluar **RelateAnything** como `RelationProvider` experimental mediante benchmark contra reglas geométricas y solución híbrida;
+7. extender geometría a polígonos/zonas;
+8. avanzar a calibración espacial y métricas físicas cuando exista evidencia suficiente;
+9. construir dashboard/mapa Community únicamente sobre datos agregados.
 
 ## Documentación clave
 
 - `docs/roadmap.md` — hoja de ruta auditada contra el repositorio;
 - `docs/development-workflow.md` — política de ramas y contribución main-first;
 - `docs/counting-geometry.md` — geometría táctil, revisiones y conteo local;
+- `docs/public-life-gehl.md` — marco de observación de vida pública, relaciones, permanencia y evaluación de RelateAnything;
 - `docs/community-flow-runtime.md` — frontera de agregación Community;
 - `docs/community-node-provisioning.md` — enrolamiento, credencial sensor y recuperación;
 - `docs/supabase-deployment.md` — runbook para el primer backend dedicado y E2E.
