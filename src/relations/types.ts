@@ -2,6 +2,7 @@ import type { BoundingBox, EntityType } from '../core/types';
 
 export type RelationEndpointKind = 'track' | 'static_element';
 export type RelationRuntime = 'onnxruntime-web' | 'rule' | 'other';
+export type RelationScoreSemantics = 'dense' | 'thresholded_partial';
 
 export interface RelationEndpoint {
   kind: RelationEndpointKind;
@@ -29,6 +30,11 @@ export interface RelationProviderMetadata {
   modelId: string;
   modelVersion: string;
   runtime: RelationRuntime;
+  /**
+   * dense: every requested candidate/predicate pair receives a score.
+   * thresholded_partial: omitted outputs are not valid negative evidence.
+   */
+  scoreSemantics: RelationScoreSemantics;
   backend?: string;
   sourceUrl?: string;
   codeLicense?: string;
@@ -65,7 +71,8 @@ export type RelationEvaluability =
   | 'evaluated'
   | 'subject_not_observable'
   | 'object_not_observable'
-  | 'provider_unavailable';
+  | 'provider_unavailable'
+  | 'pair_not_scored';
 
 export interface RelationFrameState {
   subjectId: string;

@@ -571,6 +571,10 @@ export class RelateAnythingOnnxProvider implements RelationProvider {
       modelId: this.contract.modelId,
       modelVersion: this.contract.modelVersion,
       runtime: 'onnxruntime-web',
+      // Upstream exports only the selected/final relation pairs and this
+      // adapter additionally applies thresholds. Missing output is therefore
+      // not valid negative evidence for an arbitrary requested pair.
+      scoreSemantics: 'thresholded_partial',
       backend: selection.runtime.backend,
       ...(this.contract.sourceUrl === undefined ? {} : { sourceUrl: this.contract.sourceUrl }),
       ...(this.contract.codeLicense === undefined ? {} : { codeLicense: this.contract.codeLicense }),

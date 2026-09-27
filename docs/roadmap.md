@@ -114,6 +114,7 @@
 - [x] construir adapter host-side experimental de RelateAnything con contrato ONNX publicado;
 - [ ] ejecutar runtime smoke real con artefacto + banco exactos y registrar evidencia;
 - [x] incorporar persistencia temporal de relaciones y estado “no evaluable por oclusión”;
+- [x] conectar gate + sampling + provider + persistencia en un runtime experimental Public Life (`docs/public-life-runtime.md`);
 - [x] definir manifest y auditoría de cobertura del corpus Public Life (`docs/public-life-corpus.md`);
 - [x] definir esquema/protocolo de ground truth explícito para relaciones y episodios (`docs/public-life-annotation-protocol.md`);
 - [ ] generar ground truth de actividades/relaciones observables;
@@ -125,7 +126,7 @@
 - [ ] medir impacto sobre permanencia, uso de mobiliario e interacción probable;
 - [x] definir agregados Public Life compatibles con privacidad Community (`docs/community-public-life.md`);
 
-**Estado:** la fundación ya dispone de contratos, mapa semántico, gate espacial, sampling temporal, adapter RelateAnything, persistencia de episodios y manifest de corpus. Falta poblar/validar el corpus, ejecutar runtime smoke real y conectar estas piezas al pipeline experimental antes de cualquier adopción operacional.
+**Estado:** la fundación ya dispone de contratos, mapa semántico, gate espacial, sampling temporal, adapter RelateAnything, persistencia de episodios, manifest de corpus, evaluador A/B/C/D y runtime experimental desacoplado. Falta poblar/validar el corpus, ejecutar runtime smoke real y calibrar el sistema antes de cualquier adopción operacional.
 
 ---
 
