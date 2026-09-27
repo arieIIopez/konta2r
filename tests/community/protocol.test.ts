@@ -116,3 +116,47 @@ describe('community upload protocol', () => {
     expect(validateCommunityUpload(envelope).errors).toContain('invalid_pseudonymous_node_id');
   });
 });
+
+
+describe('Public Life Community protocol', () => {
+  it('accepts coarse Public Life aggregates above the privacy floor', () => {
+    const envelope = validEnvelope();
+    envelope.records = [{
+      schemaVersion: '2.0',
+      aggregateType: 'public_life',
+      bucketStartMs: 1_788_000_000_000,
+      bucketEndMs: 1_788_000_300_000,
+      activityClass: 'seated_use',
+      elementClass: 'seating',
+      uniqueEntities: 5,
+      episodeCount: 4,
+      totalDurationSeconds: 420,
+      participantTimeSeconds: 480,
+      meanQuality: 0.83,
+    }];
+
+    expect(validateCommunityUpload(envelope)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('rejects Public Life buckets below the unique-entity or episode privacy floors', () => {
+    const envelope = validEnvelope();
+    envelope.records = [{
+      schemaVersion: '2.0',
+      aggregateType: 'public_life',
+      bucketStartMs: 1_788_000_000_000,
+      bucketEndMs: 1_788_000_300_000,
+      activityClass: 'social_interaction',
+      elementClass: 'none',
+      uniqueEntities: 2,
+      episodeCount: 1,
+      totalDurationSeconds: 120,
+      participantTimeSeconds: 240,
+      meanQuality: 0.8,
+    }];
+
+    const validation = validateCommunityUpload(envelope);
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toContain('public_life_unique_entities_below_privacy_floor:0');
+    expect(validation.errors).toContain('public_life_episode_count_below_privacy_floor:0');
+  });
+});
