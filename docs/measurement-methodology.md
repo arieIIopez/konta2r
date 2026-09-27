@@ -2,13 +2,13 @@
 
 ## Propósito
 
-Este documento define qué significa una observación válida en Konta2r. La plataforma no debe asumir que la salida del detector equivale directamente a flujo, modo o permanencia.
+Este documento define qué significa una observación válida en Konta2r. La plataforma no debe asumir que la salida del detector equivale directamente a flujo, modo, actividad, interacción o permanencia. Konta2r distingue explícitamente entre **entidades observadas**, **relaciones observables**, **episodios temporales** e **interpretaciones analíticas**.
 
 ## 1. Unidad de observación
 
-La unidad básica es una **entidad de movilidad persistente en el tiempo**.
+La unidad básica del pipeline de movilidad es una **entidad persistente en el tiempo**. Para Public Life se agregan dos unidades complementarias: una **relación observable persistente** entre entidades/elementos y un **episodio de actividad** delimitado temporal y espacialmente.
 
-Una entidad puede estar compuesta por una o más detecciones del modelo. Por ejemplo, una persona asociada de manera persistente con una bicicleta debe producir una entidad `cyclist`, no dos observaciones independientes `pedestrian` y `bicycle`.
+Una entidad puede estar compuesta por una o más detecciones del modelo. Por ejemplo, una persona asociada de manera persistente con una bicicleta puede producir una entidad `cyclist`, no dos observaciones independientes `pedestrian` y `bicycle`.
 
 ## 2. Estados de una entidad
 
@@ -52,7 +52,58 @@ Se deberán diferenciar:
 
 La actividad humana manual nunca deberá almacenarse como si hubiera sido inferida automáticamente.
 
-## 5. Dirección
+## 5. Vida pública, relaciones y actividad observable
+
+Konta2r incorpora una línea de observación de vida pública inspirada en Public Space / Public Life (PSPL), documentada en `docs/public-life-gehl.md`.
+
+Las preguntas operativas son:
+
+- **cuántos:** presencia, flujo y permanencia;
+- **quiénes:** categorías observables autorizadas por el protocolo, nunca identidad personal;
+- **dónde:** zona, posición, concentración y relación con elementos urbanos;
+- **qué hacen:** comportamientos visualmente observables;
+- **con quién o con qué:** relaciones persona–persona, persona–objeto y persona–elemento urbano;
+- **cuánto tiempo:** persistencia, permanencia y duración de episodios.
+
+Konta2r no debe traducir automáticamente una observación en una motivación. Por ejemplo, `sitting_on(bench)` es una observación; “descansando” es una interpretación. `standing` durante ocho minutos es observable; “esperando” requiere una regla o evidencia adicional.
+
+### Relaciones
+
+Toda relación automática deberá conservar:
+
+- endpoints/entidades involucradas;
+- predicado observado;
+- score;
+- proveedor/modelo y versión;
+- timestamps;
+- estado de evaluabilidad de los endpoints;
+- persistencia temporal;
+- geometría o elemento semántico asociado;
+- configuración/hash de la sesión.
+
+### Episodios
+
+Un episodio agrega relaciones y estados de track en el tiempo. Debe tolerar oclusiones breves sin confundir “no observable” con “relación observada negativamente”.
+
+### Categorías humanas
+
+La inferencia automática no debe intentar identificar personas ni inferir atributos sensibles. Cuando una investigación requiera categorías humanas adicionales, deben definirse explícitamente en el protocolo y validarse; las codificaciones manuales deben permanecer diferenciadas de las inferencias automáticas.
+
+### Validación Public Life
+
+El ground truth deberá medir, según el caso:
+
+- postura/actividad observable;
+- uso real vs proximidad a mobiliario;
+- relaciones sociales observables;
+- duración de actividad;
+- inicio/fin de episodios;
+- bicicleta montada vs caminada;
+- falsos vínculos causados por proximidad espacial.
+
+Las métricas por relación/actividad deben reportarse separadamente y también por su impacto sobre indicadores agregados.
+
+## 6. Dirección
 
 La dirección debe derivarse de la geometría y la trayectoria, no de etiquetas arbitrarias desconectadas del espacio.
 
@@ -65,7 +116,7 @@ B→A = sur
 
 La base de datos conservará tanto el sentido geométrico como la etiqueta semántica.
 
-## 6. Velocidad
+## 7. Velocidad
 
 No se reportará velocidad en km/h a partir de distancias de píxeles.
 
@@ -73,7 +124,7 @@ La velocidad métrica solo se habilitará cuando exista una transformación cali
 
 Sin calibración se podrán usar variables relativas de movimiento, pero deberán denominarse explícitamente como tales.
 
-## 7. Incertidumbre
+## 8. Incertidumbre
 
 Cada evento deberá conservar medidas que permitan estimar incertidumbre:
 
@@ -87,7 +138,7 @@ Cada evento deberá conservar medidas que permitan estimar incertidumbre:
 
 En versiones posteriores se podrá construir un `event_confidence` separado de la confianza del detector.
 
-## 8. Validación
+## 9. Validación
 
 Toda versión destinada a levantamientos deberá validarse contra observación manual independiente.
 
@@ -105,7 +156,7 @@ El conjunto mínimo de prueba deberá cubrir:
 
 Los resultados se informarán por categoría y escenario. No se aceptará una única tasa global como evidencia suficiente de desempeño.
 
-## 9. Métricas
+## 10. Métricas
 
 ### Detección
 
@@ -135,7 +186,17 @@ Los resultados se informarán por categoría y escenario. No se aceptará una ú
 - sesgo medio;
 - errores de entrada/salida de zona.
 
-## 10. Reproducibilidad de una sesión
+### Vida pública / relaciones
+
+- precision/recall/F1 por predicado observable;
+- matriz de confusión de actividades observables;
+- error de duración de episodios;
+- fragmentación temporal de relaciones;
+- falsos usos de mobiliario;
+- falsos grupos/interacciones;
+- error de indicadores agregados derivados.
+
+## 11. Reproducibilidad de una sesión
 
 Cada sesión deberá guardar un manifiesto con:
 
@@ -148,6 +209,9 @@ Cada sesión deberá guardar un manifiesto con:
 - resolución y orientación;
 - información temporal;
 - estado de calibración;
-- versión del esquema de datos.
+- versión del esquema de datos;
+- versión del vocabulario de relaciones Public Life, si se utiliza;
+- proveedor/modelo relacional y hash del artefacto, si corresponde;
+- versión del mapa semántico del espacio público.
 
-El manifiesto deberá exportarse junto con los eventos.
+El manifiesto deberá exportarse junto con los eventos, relaciones y episodios.
