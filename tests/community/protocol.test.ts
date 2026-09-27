@@ -138,6 +138,21 @@ describe('Public Life Community protocol', () => {
     expect(validateCommunityUpload(envelope)).toEqual({ valid: true, errors: [] });
   });
 
+  it('rejects local Public Life identifiers even if added accidentally', () => {
+    const unsafe = validEnvelope() as CommunityUploadEnvelope & {
+      publicLifeDebug?: { episodeId: string; semanticElementId: string };
+    };
+    unsafe.publicLifeDebug = {
+      episodeId: 'episode-123',
+      semanticElementId: 'bench-03',
+    };
+
+    const validation = validateCommunityUpload(unsafe);
+    expect(validation.valid).toBe(false);
+    expect(validation.errors.some((error) => error.includes('episodeId'))).toBe(true);
+    expect(validation.errors.some((error) => error.includes('semanticElementId'))).toBe(true);
+  });
+
   it('rejects Public Life buckets below the unique-entity or episode privacy floors', () => {
     const envelope = validEnvelope();
     envelope.records = [{
