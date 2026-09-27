@@ -115,6 +115,7 @@
 - [ ] ejecutar runtime smoke real con artefacto + banco exactos y registrar evidencia;
 - [x] incorporar persistencia temporal de relaciones y estado “no evaluable por oclusión”;
 - [x] definir manifest y auditoría de cobertura del corpus Public Life (`docs/public-life-corpus.md`);
+- [x] definir esquema/protocolo de ground truth explícito para relaciones y episodios (`docs/public-life-annotation-protocol.md`);
 - [ ] generar ground truth de actividades/relaciones observables;
 - [ ] benchmark A: reglas geométricas;
 - [ ] benchmark B: RelationProvider;
