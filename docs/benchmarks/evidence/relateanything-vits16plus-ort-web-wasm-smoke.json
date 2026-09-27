@@ -2,7 +2,7 @@
   "schemaVersion": "1",
   "recordType": "relateanything_onnxruntime_web_wasm_smoke",
   "candidateId": "maelic/relsgg-vits16plus@2db90096be5217bdc7a9003c042950f45723d105",
-  "executedAtIso": "2026-09-27T04:35:42.853Z",
+  "executedAtIso": "2026-09-27T04:37:11.858Z",
   "sourceRevision": "2db90096be5217bdc7a9003c042950f45723d105",
   "artifacts": {
     "model": {
@@ -13,7 +13,7 @@
         "name": "relateanything.onnx",
         "localPath": ".cache/relateanything/relsgg-vits16plus/relateanything.onnx",
         "sourceUrl": "https://huggingface.co/maelic/relsgg-vits16plus/resolve/main/relateanything.onnx?download=true",
-        "finalUrl": "https://us.aws.cdn.hf.co/xet-bridge-us/6aa1b029ba3dfbc4f77416b4/ce143fee4a6b8aea0fea6b41c59a09782e73d751fc5676ac3802a41af2d5eea5?response-content-disposition=attachment%3B+filename*%3DUTF-8%27%27relateanything.onnx%3B+filename%3D%22relateanything.onnx%22%3B&user_id=public&xip=OFtHyJh2124&X-Xet-Cas-Uid=public&Expires=1790487323&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNmFhMWIwMjliYTNkZmJjNGY3NzQxNmI0L2NlMTQzZmVlNGE2YjhhZWEwZmVhNmI0MWM1OWEwOTc4MmU3M2Q3NTFmYzU2NzZhYzM4MDJhNDFhZjJkNWVlYTVcXD9yZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPWF0dGFjaG1lbnQlM0IrZmlsZW5hbWUlMkElM0RVVEYtOCUyNyUyN3JlbGF0ZWFueXRoaW5nLm9ubnglM0IrZmlsZW5hbWUlM0QlMjJyZWxhdGVhbnl0aGluZy5vbm54JTIyJTNCJnVzZXJfaWQ9cHVibGljJnhpcD1PRnRIeUpoMjEyNCZYLVhldC1DYXMtVWlkPXB1YmxpYyIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiRXBvY2hUaW1lIjoxNzkwNDg3MzIzfX19XX0_&Signature=MEYCIQD2-ELRNdxKCBoh%7E98m99DuIaBXh1h79c6nqlPo6%7ET26AIhAJLc3OjszJOwXslrBO7pZ5VujagtZAJbAv%7EPlwYi7leq&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256",
+        "finalHost": "us.aws.cdn.hf.co",
         "sha256": "b8b6a047c5e0771a897a5015c2ffb09d8fe5e3ffa0651e1e61af0e8436a3617a",
         "sizeBytes": 207881414,
         "etag": "\"ce143fee4a6b8aea0fea6b41c59a09782e73d751fc5676ac3802a41af2d5eea5\"",
@@ -36,7 +36,7 @@
       "name": "predicate_bank.npz",
       "localPath": ".cache/relateanything/relsgg-vits16plus/predicate_bank.npz",
       "sourceUrl": "https://huggingface.co/maelic/relsgg-vits16plus/resolve/main/predicate_bank.npz?download=true",
-      "finalUrl": "https://us.aws.cdn.hf.co/xet-bridge-us/6aa1b029ba3dfbc4f77416b4/9f1a3cb90e2b4d18c4a07acf97024cb429c783ae4ce9eba593284c5521667296?response-content-disposition=attachment%3B+filename*%3DUTF-8%27%27predicate_bank.npz%3B+filename%3D%22predicate_bank.npz%22%3B&X-Xet-Cas-Uid=public&user_id=public&xip=OFtHyJh2124&Expires=1790487332&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNmFhMWIwMjliYTNkZmJjNGY3NzQxNmI0LzlmMWEzY2I5MGUyYjRkMThjNGEwN2FjZjk3MDI0Y2I0MjljNzgzYWU0Y2U5ZWJhNTkzMjg0YzU1MjE2NjcyOTZcXD9yZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPWF0dGFjaG1lbnQlM0IrZmlsZW5hbWUlMkElM0RVVEYtOCUyNyUyN3ByZWRpY2F0ZV9iYW5rLm5weiUzQitmaWxlbmFtZSUzRCUyMnByZWRpY2F0ZV9iYW5rLm5weiUyMiUzQiZYLVhldC1DYXMtVWlkPXB1YmxpYyZ1c2VyX2lkPXB1YmxpYyZ4aXA9T0Z0SHlKaDIxMjQiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkVwb2NoVGltZSI6MTc5MDQ4NzMzMn19fV19&Signature=MEUCIBfP5ZiFYYTaslS0HzdXO29AFwT6ABHPN-vU67lwVzMoAiEAg3HFsHSZjZ2ytefJKx0nAl2qKDpVdBXxB9KrRcvM%7EfM_&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256",
+      "finalHost": "us.aws.cdn.hf.co",
       "sha256": "708f812d6579eab1be85b3378b79e376453c2d4f65b4fad9bcebb9f5bf05da06",
       "sizeBytes": 469258,
       "etag": "\"9f1a3cb90e2b4d18c4a07acf97024cb429c783ae4ce9eba593284c5521667296\"",
@@ -57,7 +57,7 @@
         "name": "thresholds.json",
         "localPath": ".cache/relateanything/relsgg-vits16plus/thresholds.json",
         "sourceUrl": "https://huggingface.co/maelic/relsgg-vits16plus/resolve/main/thresholds.json?download=true",
-        "finalUrl": "https://huggingface.co/api/resolve-cache/models/maelic/relsgg-vits16plus/2db90096be5217bdc7a9003c042950f45723d105/thresholds.json?download=true&etag=%22b9788fc252e1801cc1230cb8c74e772a99003c31%22",
+        "finalHost": "huggingface.co",
         "sha256": "12b2b667f8ecad0b98b7cb77074e25b54b4d0ea988f5ad7eb089504ec2bd400e",
         "sizeBytes": 54252,
         "etag": "W/\"b9788fc252e1801cc1230cb8c74e772a99003c31\"",
@@ -75,7 +75,7 @@
         "name": "calibration.json",
         "localPath": ".cache/relateanything/relsgg-vits16plus/calibration.json",
         "sourceUrl": "https://huggingface.co/maelic/relsgg-vits16plus/resolve/main/calibration.json?download=true",
-        "finalUrl": "https://huggingface.co/api/resolve-cache/models/maelic/relsgg-vits16plus/2db90096be5217bdc7a9003c042950f45723d105/calibration.json?download=true&etag=%22fe4b16fba070b63c76dfd11b14aa546f08b8cd93%22",
+        "finalHost": "huggingface.co",
         "sha256": "ccf8570123d49233b32587b16224e5708442489ba17525d4b4664646346e3ecb",
         "sizeBytes": 763,
         "etag": "\"fe4b16fba070b63c76dfd11b14aa546f08b8cd93\"",
@@ -101,6 +101,79 @@
       "sizeBytes": 1634,
       "etag": "W/\"b07cbd0132256ee12c417588f17f9bac85f3c875f9e4e886b6393c4c5260363a\"",
       "contentType": "text/plain; charset=utf-8"
+    },
+    "upstreamProvenanceContent": {
+      "predicates": [
+        "wearing",
+        "riding",
+        "playing",
+        "sitting on",
+        "sitting at",
+        "holding",
+        "sitting in",
+        "looking at",
+        "using",
+        "watching",
+        "standing on",
+        "carrying",
+        "talking to",
+        "smiling at",
+        "standing beside",
+        "walking past",
+        "posing with",
+        "leaning against",
+        "part of",
+        "resting on",
+        "on",
+        "covering",
+        "inside",
+        "on top of",
+        "contained in",
+        "hanging from",
+        "surrounding",
+        "attached to",
+        "in front of",
+        "beside",
+        "to the left of",
+        "to the right of",
+        "behind",
+        "above",
+        "below"
+      ],
+      "img_size": 448,
+      "max_boxes": 32,
+      "final_budget": 128,
+      "vocab_mode": "input",
+      "text_dim": 512,
+      "outputs": [
+        "pred_logits",
+        "pair_logits",
+        "sub_idx",
+        "obj_idx",
+        "valid_mask"
+      ],
+      "output_kind": "logits",
+      "score_contract": "sigmoid(a * (pred_logit + w * pair_logit) + b)",
+      "calibration": {
+        "a": 0.5651,
+        "b": -1.9623
+      },
+      "calibrated": true,
+      "source_checkpoint": "runs/train/relsgg-vits16plus/checkpoint_last.pth",
+      "run_name": "relsgg-vits16plus",
+      "git_sha": "e9ea42aed60f766f12ad19d51709129c50110a3b",
+      "backbone_type": "dinov3",
+      "backbone_model": "facebook/dinov3-vits16plus-pretrain-lvd1689m",
+      "text_student": "runs/packed/text_student_v2_512/student.pt",
+      "text_student_sha256": "e0317830b68ea51e6711fc90d4a35954d0528e5bd78a8d5afd966601ce4ed119",
+      "pred_embeds": "runs/packed/datamix_v22/text_space/pred_embeds_studentv2_512_photo.npz",
+      "epoch": 12,
+      "torch": "2.13.0+cu130",
+      "transformers": "5.14.1",
+      "opset": 17,
+      "exported": "2026-08-27",
+      "check_max_abs_delta": 0.00006866455078125,
+      "backbone_model_local": "checkpoints/hf/vits16plus_lvd1689m"
     }
   },
   "bank": {
@@ -235,12 +308,12 @@
   },
   "runtime": {
     "attempted": true,
-    "passed": false,
+    "passed": true,
     "sessionAttempts": [
       {
         "label": "single_file",
         "passed": true,
-        "durationMs": 2900.973433,
+        "durationMs": 3252.281278,
         "externalDataPaths": []
       }
     ],
@@ -434,30 +507,26 @@
         "max": 1
       }
     ],
-    "inferenceMs": 5412.608054,
-    "findings": [
-      "unexpected_input_shape:image:batchx3x448x448",
-      "unexpected_input_shape:boxes:batchxnum_boxesx4",
-      "unexpected_input_shape:box_counts:batch"
-    ],
+    "inferenceMs": 5254.806332999999,
+    "findings": [],
     "error": null
   },
   "memory": {
     "before": {
-      "rss": 472342528,
-      "heapTotal": 7970816,
-      "heapUsed": 5139280,
-      "external": 417918708,
-      "arrayBuffers": 416060459
+      "rss": 472309760,
+      "heapTotal": 7708672,
+      "heapUsed": 5151512,
+      "external": 417916140,
+      "arrayBuffers": 416057891
     },
     "after": {
-      "rss": 1134718976,
+      "rss": 1103151104,
       "heapTotal": 9887744,
-      "heapUsed": 7767560,
-      "external": 226396613,
-      "arrayBuffers": 224427805
+      "heapUsed": 7776992,
+      "external": 226394212,
+      "arrayBuffers": 224425404
     },
-    "deltaRssBytes": 662376448,
-    "deltaExternalBytes": -191522095
+    "deltaRssBytes": 630841344,
+    "deltaExternalBytes": -191521928
   }
 }
