@@ -353,6 +353,8 @@ El modo profesional puede conservar evidencia audiovisual únicamente cuando el 
 
 ## 11. Programa experimental
 
+El diseño del corpus y sus gates de cobertura se documenta en `docs/public-life-corpus.md`.
+
 El protocolo operativo del experimento se documenta en `docs/experiments/relateanything-public-life.md`.
 
 El primer benchmark deberá comparar:
