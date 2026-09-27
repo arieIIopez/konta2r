@@ -2,9 +2,9 @@
 
 ## 1. Problema que resuelve
 
-Konta2r no debe entenderse como un detector de objetos, sino como un **instrumento de medición de movilidad basado en video**.
+Konta2r no debe entenderse como un detector de objetos, sino como un **instrumento de medición de movilidad y vida pública basado en video**.
 
-Una detección aislada (`person`, `bicycle`, `car`) no constituye todavía una observación de movilidad. El sistema debe reconstruir entidades persistentes, interpretar relaciones entre objetos, aplicar reglas espaciales y generar eventos trazables.
+Una detección aislada (`person`, `bicycle`, `car`) no constituye todavía una observación de movilidad ni de vida pública. El sistema debe reconstruir entidades persistentes, interpretar relaciones observables entre entidades y elementos del lugar, aplicar reglas espaciales y generar eventos/episodios trazables.
 
 ## 2. Flujo de procesamiento
 
@@ -15,24 +15,28 @@ Preprocesamiento
     ↓
 Detector de objetos
     ↓
-Normalización de detecciones
-    ↓
-Asociación modal / entity fusion
+Normalización / asociación modal
     ↓
 Multi-object tracker
     ↓
-Trayectorias persistentes
-    ↓
-Motor espacial
-    ├── cruces de línea
-    ├── entradas/salidas de zona
-    ├── permanencia
-    ├── sentidos
-    └── métricas calibradas
-    ↓
-Motor de eventos
-    ↓
-Persistencia + auditoría + exportación
+Entidades y trayectorias persistentes
+    ├─────────────────────────────┐
+    ↓                             ↓
+MOVILIDAD                    VIDA PÚBLICA
+motor espacial               relation candidates
+├── cruces                   ├── persona–persona
+├── zonas                    ├── persona–objeto
+├── sentidos                 └── persona–elemento urbano
+└── métricas calibradas             ↓
+    ↓                         RelationProvider opcional
+Eventos de movilidad                 ↓
+                              persistencia relacional
+                                     ↓
+                              episodios de actividad
+    └───────────────┬─────────────────┘
+                    ↓
+          Persistencia + auditoría
+             + validación + exportación
 ```
 
 La interfaz de usuario consume el estado del sistema, pero no define la lógica de medición.
@@ -122,13 +126,40 @@ Tipos de eventos previstos:
 - `speed_sample`;
 - `trajectory_sample`.
 
-### 3.7 `storage`
+### 3.7 `public-life / relations`
+
+Esta capa modela relaciones observables y episodios de actividad sin acoplar el núcleo a un modelo concreto.
+
+Contrato previsto:
+
+```ts
+interface RelationProvider {
+  metadata(): RelationProviderMetadata;
+  score(input: RelationInput): Promise<RelationObservation[]>;
+  dispose(): Promise<void>;
+}
+```
+
+Los candidatos de relación se generan desde tracks, proximidad espacial y un mapa semántico versionado del lugar. Un proveedor pesado puede invocarse sólo cuando exista ambigüedad o valor analítico suficiente.
+
+**RelateAnything** se evaluará como primer candidato porque acepta regiones externas y un vocabulario abierto de predicados y dispone de un camino ONNX/browser. No se convierte por ello en dependencia obligatoria ni se asume que sus predicados son válidos para estudios Public Life sin benchmark específico.
+
+El sistema debe mantener separados:
+
+- observación: `sitting_on(bench_01)`, `talking_to(person)`, `riding(bicycle)`;
+- persistencia temporal de esa observación;
+- episodio derivado;
+- interpretación urbanística posterior.
+
+La especificación metodológica está en `docs/public-life-gehl.md`.
+
+### 3.8 `storage`
 
 Persistencia local con esquema versionado.
 
 Inicialmente se utilizará IndexedDB, pero detrás de un repositorio abstracto. Esto permitirá incorporar posteriormente sincronización con backend sin modificar el motor de medición.
 
-### 3.8 `validation`
+### 3.9 `validation`
 
 La validación es un componente del producto, no una actividad externa.
 
@@ -142,6 +173,8 @@ Debe permitir comparar observaciones automáticas y ground truth para calcular p
 - ID switches;
 - fragmentación de tracks;
 - error de permanencia;
+- precision/recall/F1 por relación Public Life;
+- error de duración y fragmentación de episodios de actividad;
 - error de velocidad, si existe calibración.
 
 ## 4. Modelo de datos
@@ -192,6 +225,8 @@ src/
   domain/
   tracking/
   geometry/
+  relations/
+  public-life/
   spatial-events/
   storage/
   validation/
@@ -206,11 +241,6 @@ Los modelos pesados no deberán versionarse directamente en Git salvo decisión 
 
 ## 7. Criterio de diseño
 
-Konta2r considerará exitoso un conteo solo si puede responder cuatro preguntas:
+Konta2r considerará una observación auditable sólo si puede reconstruir qué entidad fue observada, dónde y cuándo, qué trayectoria/relación produjo el evento o episodio, qué regla o modelo lo generó y con qué configuración se produjo.
 
-1. **qué entidad fue observada**;
-2. **qué trayectoria produjo el evento**;
-3. **qué regla geométrica lo generó**;
-4. **con qué configuración y modelo fue producido**.
-
-Si una observación no puede reconstruirse, es un número pero no un dato científico auditable.
+Para vida pública se agrega una regla epistemológica: **la observación visual y la interpretación urbanística deben almacenarse como niveles distintos**. Si una afirmación no puede reconstruirse hasta la evidencia observable que la sustenta, puede ser una interpretación útil, pero no un dato automático científicamente auditable.
